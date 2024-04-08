@@ -500,7 +500,13 @@ if __name__ == '__main__':
 
     pygame.display.flip()
 
-    out_path = datetime.datetime.now().strftime("%Y_%m_%d_rowing_log.csv")
+    out_path_template = datetime.datetime.now().strftime("%Y_%m_%d_rowing_log{}.csv")
+    out_path = out_path_template.format("")
+    counter = 0
+    while os.path.exists(out_path):
+        counter += 1
+        out_path = out_path_template.format(f"_{zero_pad(counter, 3)}")
+
     with open(out_path, "w") as out_file:
         out_file.write("time, phase, bpm, cadence, watts, meters\n")
 
@@ -508,6 +514,8 @@ if __name__ == '__main__':
             phase, t, bpm, cadence, watts, distance = row
             t -= min_t
             out_file.write(f"{t}, {phase}, {bpm}, {cadence}, {watts}, {distance}\n")
+
+    print("Workout complete!")
 
     while poll_events():
         poll_events()
