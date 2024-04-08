@@ -281,7 +281,7 @@ if __name__ == '__main__':
                 "CSAFE_PM_GET_STROKESTATE"]
             reply = erg.send(query)
 
-            distance = reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1] / 10.0
+            distance = (reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1]) / 10.0
             cadence = reply["CSAFE_GETCADENCE_CMD"][0]
             watts = reply["CSAFE_GETPOWER_CMD"][0]
             current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
@@ -365,7 +365,7 @@ if __name__ == '__main__':
                 "CSAFE_PM_GET_STROKESTATE"]
             reply = erg.send(query)
 
-            distance = reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1] / 10.0
+            distance = (reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1]) / 10.0
             cadence = reply["CSAFE_GETCADENCE_CMD"][0]
             watts = reply["CSAFE_GETPOWER_CMD"][0]
             current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
@@ -437,7 +437,7 @@ if __name__ == '__main__':
                 "CSAFE_PM_GET_STROKESTATE"]
             reply = erg.send(query)
 
-            distance = reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1] / 10.0
+            distance = (reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1]) / 10.0
             cadence = reply["CSAFE_GETCADENCE_CMD"][0]
             watts = reply["CSAFE_GETPOWER_CMD"][0]
             current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
