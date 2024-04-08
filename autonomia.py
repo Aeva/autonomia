@@ -6,6 +6,20 @@ from PyRow import pyrow
 
 import pygame
 import time
+import math
+import datetime
+
+# An interval consists of an active BPM calibration phase,
+# followed by steady state phase, followed by a cooldown phase
+INTERVALS = 2
+
+# time in minutes
+CALIBRATION_TIME = 1
+STEADY_TIME = 7
+COOLDOWN_TIME = 0.5
+
+TARGET_LOW = 10
+TARGET_HIGH = 15
 
 
 """
@@ -62,12 +76,19 @@ if __name__ == '__main__':
     screen_height = screen.get_height();
     segment_w = screen_width / 100
 
+    logged_stats = []
+
+    def record(phase, bpm, cadence = 0, watts = 0, distance = 0):
+        row = (phase, time.time(), bpm, cadence, watts, distance)
+        logged_stats.append(row)
+
     erg = None
     print("Searching for erg...")
     while erg is None:
         poll_events()
         for available_erg in pyrow.find():
             erg = pyrow.pyrow(available_erg)
+            print("erg found!")
             break
         if not erg:
             screen.fill("gray")
@@ -76,7 +97,7 @@ if __name__ == '__main__':
             pygame.display.flip()
             time.sleep(.5)
 
-    print("erg found!")
+    erg.send(['CSAFE_RESET_CMD'])
 
     while poll_events(pygame.KEYDOWN, pygame.K_SPACE):
         query = ["CSAFE_GETHRCUR_CMD"]
@@ -123,6 +144,8 @@ if __name__ == '__main__':
         elapsed_minutes = zero_pad(elapsed_seconds // 60)
         elapsed_seconds = zero_pad(elapsed_seconds % 60)
         elapsed_time = f"{elapsed_minutes}:{elapsed_seconds}"
+
+        record(0, current_bpm)
 
         screen.fill((64, 0, 128))
 
@@ -176,11 +199,13 @@ if __name__ == '__main__':
         text_surface = bigger_font.render(f"{elapsed_time}", True, (255, 255, 255))
         screen.blit(text_surface, (900, 296))
 
+        pygame.draw.lines(screen, "blue", False, [(200, 900), (700, 900)], 16)
         text_surface = font.render("Average:", True, (255, 255, 255))
         screen.blit(text_surface, (200, 600))
         text_surface = bigger_font.render(f"{resting_bpm_average}", True, (255, 255, 255))
         screen.blit(text_surface, (200, 696))
 
+        pygame.draw.lines(screen, "pink", False, [(900, 900), (1400, 900)], 16)
         text_surface = font.render("Mode:", True, (255, 255, 255))
         screen.blit(text_surface, (900, 600))
         text_surface = bigger_font.render(f"{resting_bpm_mode}", True, (255, 255, 255))
@@ -195,29 +220,296 @@ if __name__ == '__main__':
         screen.blit(text_surface, (650, 1200))
 
         pygame.display.flip()
-        time.sleep(1)
+        time.sleep(.25)
+        if not poll_events(pygame.KEYDOWN, pygame.K_SPACE):
+            break
+        time.sleep(.25)
+        if not poll_events(pygame.KEYDOWN, pygame.K_SPACE):
+            break
+        time.sleep(.25)
+        if not poll_events(pygame.KEYDOWN, pygame.K_SPACE):
+            break
+        time.sleep(.25)
+
+    screen.fill((96, 64, 128))
+    pygame.display.flip()
 
     workout = erg.get_workout()
-    while workout['state'] == 0:
+    while workout['state'] == 0 and poll_events(pygame.KEYDOWN, pygame.K_SPACE):
         poll_events()
+        screen.fill((96, 96, 128))
+
+        current_bpm = erg.send(query)["CSAFE_GETHRCUR_CMD"][0]
+        record(1, current_bpm)
+
+        text_surface = font.render("Current BPM:", True, (255, 255, 255))
+        screen.blit(text_surface, (200, 200))
+        text_surface = bigger_font.render(f"{current_bpm}", True, (255, 255, 255))
+        screen.blit(text_surface, (200, 296))
+
+        text_surface = font.render("Resting BPM:", True, (255, 255, 255))
+        screen.blit(text_surface, (900, 200))
+        text_surface = bigger_font.render(f"{resting_bpm}", True, (255, 255, 255))
+        screen.blit(text_surface, (900, 296))
+
+        text_surface = big_font.render("please begin", True, (255, 255, 255))
+        screen.blit(text_surface, (700, screen_height * .5 - 100))
+        pygame.display.flip()
+
         time.sleep(1)
         workout = erg.get_workout()
 
-    while workout['state'] == 1:
+    target_bpm = (resting_bpm + TARGET_LOW, resting_bpm + TARGET_HIGH)
+    target_cadence = 0
+    target_watts = 0
+    samples = 0
+    distance = 0
+
+    workout_start_time = time.time()
+
+    for interval in range(INTERVALS):
+        interval_start_time = time.time()
+
+        calibration_stop_time = interval_start_time + CALIBRATION_TIME * 60
+
+        while time.time() < calibration_stop_time and poll_events(pygame.KEYDOWN, pygame.K_BACKSPACE):
+            query = [
+                "CSAFE_PM_GET_WORKDISTANCE",
+                "CSAFE_GETCADENCE_CMD",
+                "CSAFE_GETPOWER_CMD",
+                "CSAFE_GETHRCUR_CMD",
+                "CSAFE_PM_GET_STROKESTATE"]
+            reply = erg.send(query)
+
+            distance = reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1] / 10.0
+            cadence = reply["CSAFE_GETCADENCE_CMD"][0]
+            watts = reply["CSAFE_GETPOWER_CMD"][0]
+            current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
+            state = reply["CSAFE_PM_GET_STROKESTATE"]
+
+            record(2, current_bpm, cadence, watts, distance)
+
+            alpha = 1
+            reading_color = (255, 255, 255)
+
+            if current_bpm < target_bpm[0]:
+                alpha = math.sin(time.time() * 5) * .5 + .5
+                reading_color = (255, 255 * alpha, 255 * alpha)
+                screen.fill((0, 128, 0))
+                text_surface = bigger_font.render("increase speed", True, (alpha, alpha, alpha))
+                screen.blit(text_surface, (100, 1200))
+            elif current_bpm > target_bpm[1]:
+                alpha = math.sin(time.time() * 5) * .5 + .5
+                reading_color = (255 * alpha, 255 * alpha, 255)
+                screen.fill((128, 0, 0))
+                text_surface = bigger_font.render("decrease speed", True, (alpha, alpha, alpha))
+                screen.blit(text_surface, (100, 1200))
+            else:
+                screen.fill((96, 64, 128))
+                text_surface = big_font.render("perfect.  hold.", True, (255, 255, 255))
+                screen.blit(text_surface, (100, 1200))
+                target_cadence += cadence
+                target_watts += watts
+                samples += 1
+
+            remaining_seconds = max(int(calibration_stop_time - time.time()), 0)
+            remaining_minutes = zero_pad(remaining_seconds // 60)
+            remaining_seconds = zero_pad(remaining_seconds % 60)
+            remaining_time = f"{remaining_minutes}:{remaining_seconds}"
+
+            text_surface = font.render(f"Remaining Calibration Time {remaining_time}", True, (255, 255, 255))
+            screen.blit(text_surface, (0, 0))
+
+
+            text_surface = font.render("Current Cadence:", True, (255, 255, 255))
+            screen.blit(text_surface, (200, 200))
+            text_surface = bigger_font.render(f"{cadence}", True, reading_color)
+            screen.blit(text_surface, (200, 296))
+
+            if samples > 0:
+                text_surface = font.render("Target Cadence:", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 200))
+                text_surface = bigger_font.render(f"{int(target_cadence / samples)}", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 296))
+
+            text_surface = font.render("Current Watts:", True, (255, 255, 255))
+            screen.blit(text_surface, (200, 600))
+            text_surface = bigger_font.render(f"{watts}", True, reading_color)
+            screen.blit(text_surface, (200, 696))
+
+            if samples > 0:
+                text_surface = font.render("Target Watts:", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 600))
+                text_surface = bigger_font.render(f"{int(target_watts / samples)}", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 696))
+
+            pygame.display.flip()
+            time.sleep(.1)
+
+        if samples > 0:
+            target_cadence //= samples
+            target_watts //= samples
+        else:
+            target_cadence = 15
+            target_watts = 8
+        samples = 1
+
+        steady_stop_time = time.time() + STEADY_TIME * 60
+
+        while time.time() < steady_stop_time and poll_events(pygame.KEYDOWN, pygame.K_BACKSPACE):
+            query = [
+                "CSAFE_PM_GET_WORKDISTANCE",
+                "CSAFE_GETCADENCE_CMD",
+                "CSAFE_GETPOWER_CMD",
+                "CSAFE_GETHRCUR_CMD",
+                "CSAFE_PM_GET_STROKESTATE"]
+            reply = erg.send(query)
+
+            distance = reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1] / 10.0
+            cadence = reply["CSAFE_GETCADENCE_CMD"][0]
+            watts = reply["CSAFE_GETPOWER_CMD"][0]
+            current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
+            state = reply["CSAFE_PM_GET_STROKESTATE"]
+
+            record(3, current_bpm, cadence, watts, distance)
+
+            alpha = 1
+            reading_color = (255, 255, 255)
+
+            if cadence < target_cadence - 1 or watts < target_watts - 1:
+                alpha = math.sin(time.time() * 5) * .5 + .5
+                reading_color = (255, 255 * alpha, 255 * alpha)
+                screen.fill((0, 128, 0))
+                text_surface = bigger_font.render("increase speed", True, (alpha, alpha, alpha))
+                screen.blit(text_surface, (100, 1200))
+            elif cadence > target_cadence + 1 or watts > target_watts + 1:
+                alpha = math.sin(time.time() * 5) * .5 + .5
+                reading_color = (255 * alpha, 255 * alpha, 255)
+                screen.fill((128, 0, 0))
+                text_surface = bigger_font.render("decrease speed", True, (alpha, alpha, alpha))
+                screen.blit(text_surface, (100, 1200))
+            else:
+                screen.fill((96, 64, 128))
+                text_surface = big_font.render("perfect.  hold.", True, (255, 255, 255))
+                screen.blit(text_surface, (100, 1200))
+
+            remaining_seconds = max(int(steady_stop_time - time.time()), 0)
+            remaining_minutes = zero_pad(remaining_seconds // 60)
+            remaining_seconds = zero_pad(remaining_seconds % 60)
+            remaining_time = f"{remaining_minutes}:{remaining_seconds}"
+
+            text_surface = font.render(f"Remaining Time {remaining_time}", True, (255, 255, 255))
+            screen.blit(text_surface, (0, 0))
+
+            text_surface = font.render("Current Cadence:", True, (255, 255, 255))
+            screen.blit(text_surface, (200, 200))
+            text_surface = bigger_font.render(f"{cadence}", True, (255, 255, 255))
+            screen.blit(text_surface, (200, 296))
+
+            if samples > 0:
+                text_surface = font.render("Target Cadence:", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 200))
+                text_surface = bigger_font.render(f"{target_cadence}", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 296))
+
+            text_surface = font.render("Current Watts:", True, (255, 255, 255))
+            screen.blit(text_surface, (200, 600))
+            text_surface = bigger_font.render(f"{watts}", True, (255, 255, 255))
+            screen.blit(text_surface, (200, 696))
+
+            if samples > 0:
+                text_surface = font.render("Target Watts:", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 600))
+                text_surface = bigger_font.render(f"{target_watts}", True, (255, 255, 255))
+                screen.blit(text_surface, (900, 696))
+
+            pygame.display.flip()
+            time.sleep(.1)
+
+        cooldown_stop_time = time.time() + COOLDOWN_TIME * 60
+
+        while time.time() < cooldown_stop_time and poll_events(pygame.KEYDOWN, pygame.K_BACKSPACE):
+            query = [
+                "CSAFE_PM_GET_WORKDISTANCE",
+                "CSAFE_GETCADENCE_CMD",
+                "CSAFE_GETPOWER_CMD",
+                "CSAFE_GETHRCUR_CMD",
+                "CSAFE_PM_GET_STROKESTATE"]
+            reply = erg.send(query)
+
+            distance = reply["CSAFE_PM_GET_WORKDISTANCE"][0] + reply["CSAFE_PM_GET_WORKDISTANCE"][1] / 10.0
+            cadence = reply["CSAFE_GETCADENCE_CMD"][0]
+            watts = reply["CSAFE_GETPOWER_CMD"][0]
+            current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
+            state = reply["CSAFE_PM_GET_STROKESTATE"]
+
+            record(4, current_bpm, cadence, watts, distance)
+
+            screen.fill((96, 96, 128))
+
+            remaining_seconds = max(int(cooldown_stop_time - time.time()), 0)
+            remaining_minutes = zero_pad(remaining_seconds // 60)
+            remaining_seconds = zero_pad(remaining_seconds % 60)
+            remaining_time = f"{remaining_minutes}:{remaining_seconds}"
+
+            text_surface = font.render(f"Cool Down {remaining_time}", True, (255, 255, 255))
+            screen.blit(text_surface, (0, 0))
+
+            pygame.display.flip()
+            time.sleep(.1)
+
+
+    screen.fill((96, 96, 96))
+
+    min_t = logged_stats[0][1]
+    max_t = logged_stats[-1][1]
+    t_span = max_t - min_t
+
+    bpm_line = []
+    last_phase = 0
+
+    for row in logged_stats:
+        phase, t, bpm, cadence, watts, distance = row
+        t_alpha = (t - min_t) / t_span
+        x_plot = screen_width * t_alpha
+        y_plot = screen_height * .5 - ((bpm - resting_bpm) * 20)
+        bpm_line.append((x_plot, y_plot))
+        if phase != last_phase:
+            last_phase = phase
+            phase_color = "gray"
+            if phase == 2:
+                phase_color = "blue"
+            if phase == 3:
+                phase_color = "green"
+            if phase == 4:
+                phase_color = "red"
+            pygame.draw.lines(screen, phase_color, False, [(x_plot, 0), (x_plot, screen_height)], 2)
+
+    pygame.draw.lines(screen, "blue", False, [(0, screen_height * .5), (screen_width, screen_height * .5)], 2)
+
+    pygame.draw.lines(screen, "black", False,
+                      [(0, screen_height * .5 - (TARGET_LOW * 20)),
+                       (screen_width, screen_height * .5 - (TARGET_LOW * 20))], 2)
+
+    pygame.draw.lines(screen, "black", False,
+                      [(0, screen_height * .5 - (TARGET_HIGH * 20)),
+                       (screen_width, screen_height * .5 - (TARGET_HIGH * 20))], 2)
+
+    pygame.draw.lines(screen, "white", False, bpm_line, 1)
+
+
+    pygame.display.flip()
+
+    out_path = datetime.datetime.now().strftime("%Y_%m_%d_rowing_log.csv")
+    with open(out_path, "w") as out_file:
+        out_file.write("time, phase, bpm, cadence, watts, meters\n")
+
+        for row in logged_stats:
+            phase, t, bpm, cadence, watts, distance = row
+            t -= min_t
+            out_file.write(f"{t}, {phase}, {bpm}, {cadence}, {watts}, {distance}\n")
+
+    while poll_events():
         poll_events()
-        workout = erg.get_workout()
+        time.sleep(.1)
 
-        query = [
-            "CSAFE_PM_GET_WORKTIME",
-            "CSAFE_PM_GET_WORKDISTANCE",
-            "CSAFE_GETCADENCE_CMD",
-            "CSAFE_GETPOWER_CMD",
-            "CSAFE_GETHRCUR_CMD",
-            "CSAFE_PM_GET_STROKESTATE"]
-
-        reply = erg.send(query)
-        for key in sorted(reply.keys()):
-            value = reply[key]
-            print(f"{key} : {value}")
-
-        print("-------------")
