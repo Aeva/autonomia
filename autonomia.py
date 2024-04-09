@@ -8,6 +8,7 @@ import pygame
 import time
 import math
 import datetime
+import json
 
 # An interval consists of an active BPM calibration phase,
 # followed by steady state phase, followed by a cooldown phase
@@ -78,8 +79,10 @@ if __name__ == '__main__':
 
     logged_stats = []
 
+    program_start_time = time.time()
+
     def record(phase, bpm, cadence = 0, watts = 0, distance = 0):
-        row = (phase, time.time(), bpm, cadence, watts, distance)
+        row = (phase, time.time() - program_start_time, bpm, cadence, watts, distance)
         logged_stats.append(row)
 
     erg = None
@@ -500,20 +503,29 @@ if __name__ == '__main__':
 
     pygame.display.flip()
 
-    out_path_template = datetime.datetime.now().strftime("%Y_%m_%d_rowing_log{}.csv")
+    date_stamp = datetime.datetime.now().strftime("%Y_%m_%d")
+    out_path_template = f"{date_stamp}_rowing_log{{}}.json"
     out_path = out_path_template.format("")
+
     counter = 0
     while os.path.exists(out_path):
         counter += 1
         out_path = out_path_template.format(f"_{zero_pad(counter, 3)}")
 
+    # should probably just dump all of this into a sqlite database
     with open(out_path, "w") as out_file:
-        out_file.write("time, phase, bpm, cadence, watts, meters\n")
-
-        for row in logged_stats:
-            phase, t, bpm, cadence, watts, distance = row
-            t -= min_t
-            out_file.write(f"{t}, {phase}, {bpm}, {cadence}, {watts}, {distance}\n")
+        log_blob = {
+            "date" : date_stamp,
+            "resting_bpm" : resting_bpm,
+            "intervals" : INTERVALS,
+            "calibration_time" : CALIBRATION_TIME,
+            "steady_time" : STEADY_TIME,
+            "cooldown_time" : COOLDOWN_TIME,
+            "target_low" : 10,
+            "target_high" : 15,
+            "log" : logged_stats,
+        }
+        out_file.write(json.dumps(log_blob))
 
     print("Workout complete!")
 
