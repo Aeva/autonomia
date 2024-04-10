@@ -15,9 +15,9 @@ import json
 INTERVALS = 2
 
 # time in minutes
-CALIBRATION_TIME = 1
-STEADY_TIME = 7
-COOLDOWN_TIME = 0.5
+CALIBRATION_TIME = 2
+STEADY_TIME = 8
+COOLDOWN_TIME = 1
 
 TARGET_LOW = 10
 TARGET_HIGH = 15
@@ -68,6 +68,7 @@ def zero_pad(num, digits = 2):
 if __name__ == '__main__':
     pygame.init()
     pygame.font.init()
+    smol_font = pygame.font.SysFont("don't care", 64)
     font = pygame.font.SysFont("don't care", 96)
     big_font = pygame.font.SysFont("don't care", 200)
     bigger_font = pygame.font.SysFont("don't care", 400)
@@ -81,8 +82,12 @@ if __name__ == '__main__':
 
     program_start_time = time.time()
 
-    def record(phase, bpm, cadence = 0, watts = 0, distance = 0):
-        row = (phase, time.time() - program_start_time, bpm, cadence, watts, distance)
+    log_headers = [
+        "phase", "elapsed_time", "bpm", "cadence", "watts", "distance", "target cadence", "target watts"]
+
+    def record(phase, bpm, cadence = 0, watts = 0, distance = 0, target_cadence = 0, target_watts = 0):
+        elapsed_time = time.time() - program_start_time
+        row = (phase, elapsed_time, bpm, cadence, watts, distance, target_cadence, target_watts)
         logged_stats.append(row)
 
     erg = None
@@ -290,7 +295,7 @@ if __name__ == '__main__':
             current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
             state = reply["CSAFE_PM_GET_STROKESTATE"]
 
-            record(2, current_bpm, cadence, watts, distance)
+            record(2, current_bpm, cadence, watts, distance, target_cadence, target_watts)
 
             alpha = 1
             reading_color = (255, 255, 255)
@@ -374,22 +379,22 @@ if __name__ == '__main__':
             current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
             state = reply["CSAFE_PM_GET_STROKESTATE"]
 
-            record(3, current_bpm, cadence, watts, distance)
+            record(3, current_bpm, cadence, watts, distance, target_cadence, target_watts)
 
             alpha = 1
             reading_color = (255, 255, 255)
 
-            if cadence < target_cadence - 1 or watts < target_watts - 1:
-                alpha = math.sin(time.time() * 5) * .5 + .5
-                reading_color = (255, 255 * alpha, 255 * alpha)
-                screen.fill((0, 128, 0))
-                text_surface = bigger_font.render("increase speed", True, (alpha, alpha, alpha))
-                screen.blit(text_surface, (100, 1200))
-            elif cadence > target_cadence + 1 or watts > target_watts + 1:
+            if cadence > target_cadence + 1 or watts > target_watts + 1:
                 alpha = math.sin(time.time() * 5) * .5 + .5
                 reading_color = (255 * alpha, 255 * alpha, 255)
                 screen.fill((128, 0, 0))
                 text_surface = bigger_font.render("decrease speed", True, (alpha, alpha, alpha))
+                screen.blit(text_surface, (100, 1200))
+            elif cadence < target_cadence - 1 or watts < target_watts - 1:
+                alpha = math.sin(time.time() * 5) * .5 + .5
+                reading_color = (255, 255 * alpha, 255 * alpha)
+                screen.fill((0, 128, 0))
+                text_surface = bigger_font.render("increase speed", True, (alpha, alpha, alpha))
                 screen.blit(text_surface, (100, 1200))
             else:
                 screen.fill((96, 64, 128))
@@ -446,7 +451,7 @@ if __name__ == '__main__':
             current_bpm = reply["CSAFE_GETHRCUR_CMD"][0]
             state = reply["CSAFE_PM_GET_STROKESTATE"]
 
-            record(4, current_bpm, cadence, watts, distance)
+            record(4, current_bpm, cadence, watts, distance, 0, 0)
 
             screen.fill((96, 96, 128))
 
@@ -472,7 +477,7 @@ if __name__ == '__main__':
     last_phase = 0
 
     for row in logged_stats:
-        phase, t, bpm, cadence, watts, distance = row
+        phase, t, bpm, cadence, watts, distance, target_cadence, target_watts = row
         t_alpha = (t - min_t) / t_span
         x_plot = screen_width * t_alpha
         y_plot = screen_height * .5 - ((bpm - resting_bpm) * 20)
@@ -500,6 +505,11 @@ if __name__ == '__main__':
 
     pygame.draw.lines(screen, "white", False, bpm_line, 1)
 
+    text_surface = smol_font.render(f"active target: {target_bpm[0]} to {target_bpm[1]}", True, (255, 255, 255))
+    screen.blit(text_surface, (10, screen_height - 50))
+    text_surface = smol_font.render(f"resting bpm: {resting_bpm}", True, (255, 255, 255))
+    screen.blit(text_surface, (10, screen_height - 100))
+
 
     pygame.display.flip()
 
@@ -521,8 +531,9 @@ if __name__ == '__main__':
             "calibration_time" : CALIBRATION_TIME,
             "steady_time" : STEADY_TIME,
             "cooldown_time" : COOLDOWN_TIME,
-            "target_low" : 10,
-            "target_high" : 15,
+            "target_low" : TARGET_LOW,
+            "target_high" : TARGET_HIGH,
+            "log_headers" : log_headers,
             "log" : logged_stats,
         }
         out_file.write(json.dumps(log_blob))
