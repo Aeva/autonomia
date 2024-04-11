@@ -83,11 +83,70 @@ if __name__ == '__main__':
     program_start_time = time.time()
 
     log_headers = [
-        "phase", "elapsed_time", "bpm", "cadence", "watts", "distance", "target cadence", "target watts"]
+        "phase", "elapsed_time", "bpm", "cadence", "watts", "distance",
+        "target cadence", "target watts", "bpm_rolling_average"]
 
-    def record(phase, bpm, cadence = 0, watts = 0, distance = 0, target_cadence = 0, target_watts = 0):
+    def get_weighted_bpm(index = -1):
+        if len(logged_stats) > 0:
+            return logged_stats[index][8]
+        else:
+            return 0
+
+    def window(samples, seconds):
+        if len(samples) <= 1:
+            return samples
+        seek_seq = samples[1:][::-1]
+        last_t = samples[-1][1]
+        seek = 1
+        for sample in samples[::-1]:
+            if last_t - sample[1] <= seconds:
+                seek += 1
+            else:
+                break
+        start = (seek + 1) * -1
+        seq = samples[start:-1]
+        return seq
+
+    def log_window(seconds):
+        return window(logged_stats, seconds)
+
+    def weighted_average(rows, stat_index, exponent=0):
+        if len(rows) < 1:
+            return 0
+        elif len(rows) == 1:
+            return rows[1]
+        elif exponent <= 0:
+            return sum([bpm for t, bpm in rows]) / len(rows)
+        else:
+            acc_v = 0
+            acc_w = 0
+            samples = [(row[1], row[stat_index]) for row in rows]
+            t1 = samples[0][0]
+            tN = samples[-1][0]
+            dt = tN - t1
+            for t, stat in samples:
+                a = (t - t1) / dt
+                a_exp = a ** exponent
+                acc_v += stat * a_exp
+                acc_w += a_exp
+            return acc_v / acc_w
+
+    def record(phase, raw_bpm, cadence = 0, watts = 0, distance = 0, target_cadence = 0, target_watts = 0):
         elapsed_time = time.time() - program_start_time
-        row = (phase, elapsed_time, bpm, cadence, watts, distance, target_cadence, target_watts)
+
+        rolling_bpm = raw_bpm
+        row = (phase, elapsed_time, raw_bpm, cadence, watts, distance,
+               target_cadence, target_watts, rolling_bpm)
+
+        window_seq = log_window(5)
+        window_seq.append(row)
+        if len(window_seq) > 1:
+            stat_index = 2
+            exponent = 2
+            rolling_bpm = weighted_average(window_seq, stat_index, exponent)
+
+            row = (phase, elapsed_time, raw_bpm, cadence, watts, distance,
+                target_cadence, target_watts, rolling_bpm)
         logged_stats.append(row)
 
     erg = None
@@ -297,21 +356,37 @@ if __name__ == '__main__':
 
             record(2, current_bpm, cadence, watts, distance, target_cadence, target_watts)
 
+            weighted_bpm = get_weighted_bpm()
+
             alpha = 1
             reading_color = (255, 255, 255)
 
-            if current_bpm < target_bpm[0]:
+            hold = False
+
+            if weighted_bpm < target_bpm[0]:
                 alpha = math.sin(time.time() * 5) * .5 + .5
                 reading_color = (255, 255 * alpha, 255 * alpha)
                 screen.fill((0, 128, 0))
                 text_surface = bigger_font.render("increase speed", True, (alpha, alpha, alpha))
                 screen.blit(text_surface, (100, 1200))
-            elif current_bpm > target_bpm[1]:
+
+                # reset the calibration targets
+                target_cadence = cadence
+                target_watts = watts
+                samples = 1
+
+            elif weighted_bpm > target_bpm[1]:
                 alpha = math.sin(time.time() * 5) * .5 + .5
                 reading_color = (255 * alpha, 255 * alpha, 255)
                 screen.fill((128, 0, 0))
                 text_surface = bigger_font.render("decrease speed", True, (alpha, alpha, alpha))
                 screen.blit(text_surface, (100, 1200))
+
+                # reset the calibration targets
+                target_cadence = cadence
+                target_watts = watts
+                samples = 1
+
             else:
                 screen.fill((96, 64, 128))
                 text_surface = big_font.render("perfect.  hold.", True, (255, 255, 255))
@@ -319,6 +394,7 @@ if __name__ == '__main__':
                 target_cadence += cadence
                 target_watts += watts
                 samples += 1
+                hold = True
 
             remaining_seconds = max(int(calibration_stop_time - time.time()), 0)
             remaining_minutes = zero_pad(remaining_seconds // 60)
@@ -328,13 +404,24 @@ if __name__ == '__main__':
             text_surface = font.render(f"Remaining Calibration Time {remaining_time}", True, (255, 255, 255))
             screen.blit(text_surface, (0, 0))
 
+            if False:
+                # for debugging
+                text_surface = font.render("Current BPM:", True, (255, 255, 255))
+                screen.blit(text_surface, (1600, 200))
+                text_surface = bigger_font.render(f"{current_bpm}", True, (255, 255, 255))
+                screen.blit(text_surface, (1600, 296))
+
+                text_surface = font.render("Target BPM (low):", True, (255, 255, 255))
+                screen.blit(text_surface, (1600, 600))
+                text_surface = bigger_font.render(f"{target_bpm[0]}", True, (255, 255, 255))
+                screen.blit(text_surface, (1600, 696))
 
             text_surface = font.render("Current Cadence:", True, (255, 255, 255))
             screen.blit(text_surface, (200, 200))
             text_surface = bigger_font.render(f"{cadence}", True, reading_color)
             screen.blit(text_surface, (200, 296))
 
-            if samples > 0:
+            if samples > 0 and hold:
                 text_surface = font.render("Target Cadence:", True, (255, 255, 255))
                 screen.blit(text_surface, (900, 200))
                 text_surface = bigger_font.render(f"{int(target_cadence / samples)}", True, (255, 255, 255))
@@ -345,7 +432,7 @@ if __name__ == '__main__':
             text_surface = bigger_font.render(f"{watts}", True, reading_color)
             screen.blit(text_surface, (200, 696))
 
-            if samples > 0:
+            if samples > 0 and hold:
                 text_surface = font.render("Target Watts:", True, (255, 255, 255))
                 screen.blit(text_surface, (900, 600))
                 text_surface = bigger_font.render(f"{int(target_watts / samples)}", True, (255, 255, 255))
@@ -474,14 +561,19 @@ if __name__ == '__main__':
     t_span = max_t - min_t
 
     bpm_line = []
+    weighted_bpm_line = []
     last_phase = 0
 
     for row in logged_stats:
-        phase, t, bpm, cadence, watts, distance, target_cadence, target_watts = row
+        phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm = row
         t_alpha = (t - min_t) / t_span
         x_plot = screen_width * t_alpha
         y_plot = screen_height * .5 - ((bpm - resting_bpm) * 20)
         bpm_line.append((x_plot, y_plot))
+
+        y_plot = screen_height * .5 - ((weighted_bpm - resting_bpm) * 20)
+        weighted_bpm_line.append((x_plot, y_plot))
+
         if phase != last_phase:
             last_phase = phase
             phase_color = "gray"
@@ -503,7 +595,8 @@ if __name__ == '__main__':
                       [(0, screen_height * .5 - (TARGET_HIGH * 20)),
                        (screen_width, screen_height * .5 - (TARGET_HIGH * 20))], 2)
 
-    pygame.draw.lines(screen, "white", False, bpm_line, 1)
+    pygame.draw.lines(screen, "red", False, bpm_line, 1)
+    pygame.draw.lines(screen, "white", False, weighted_bpm_line, 1)
 
     text_surface = smol_font.render(f"active target: {target_bpm[0]} to {target_bpm[1]}", True, (255, 255, 255))
     screen.blit(text_surface, (10, screen_height - 50))
