@@ -86,6 +86,8 @@ if __name__ == '__main__':
         "phase", "elapsed_time", "bpm", "cadence", "watts", "distance",
         "target cadence", "target watts", "bpm_rolling_average"]
 
+    start_time_str = datetime.datetime.now().strftime("%I:%M %p")
+
     def get_weighted_bpm(index = -1):
         if len(logged_stats) > 0:
             return logged_stats[index][8]
@@ -332,6 +334,28 @@ if __name__ == '__main__':
     samples = 0
     distance = 0
 
+    last_valid_cadence = None
+    def filter_cadence(cadence):
+        global last_valid_cadence
+        if cadence < 35:
+            last_valid_cadence = cadence
+            return cadence
+        elif last_valid_cadence is not None:
+            if cadence < last_valid_cadence * 1.1:
+                last_valid_cadence = cadence
+                return cadence
+            else:
+                return last_valid_cadence
+        else:
+            return 0
+
+    assert(filter_cadence(200) == 0)
+    last_valid_cadence = None
+
+    assert(filter_cadence(10) == 10)
+    assert(filter_cadence(200) == 10)
+    last_valid_cadence = None
+
     workout_start_time = time.time()
 
     for interval in range(INTERVALS):
@@ -355,6 +379,10 @@ if __name__ == '__main__':
             state = reply["CSAFE_PM_GET_STROKESTATE"]
 
             record(2, current_bpm, cadence, watts, distance, target_cadence, target_watts)
+
+            # The PM5 will sometimes glitch out when rowing slowly and give you an impossibly
+            # high cadence.  This filter should prevent it from disrupting the calibration step.
+            cadence = filter_cadence(cadence)
 
             weighted_bpm = get_weighted_bpm()
 
@@ -467,6 +495,10 @@ if __name__ == '__main__':
             state = reply["CSAFE_PM_GET_STROKESTATE"]
 
             record(3, current_bpm, cadence, watts, distance, target_cadence, target_watts)
+
+            # The PM5 will sometimes glitch out when rowing slowly and give you an impossibly
+            # high cadence.  This filter should prevent it from disrupting the steady state phase.
+            cadence = filter_cadence(cadence)
 
             alpha = 1
             reading_color = (255, 255, 255)
@@ -619,6 +651,7 @@ if __name__ == '__main__':
     with open(out_path, "w") as out_file:
         log_blob = {
             "date" : date_stamp,
+            "start_time" : start_time_str,
             "resting_bpm" : resting_bpm,
             "intervals" : INTERVALS,
             "calibration_time" : CALIBRATION_TIME,
