@@ -28,7 +28,7 @@ class RestingBPM:
             resting_bpm_deviation += abs(resting_bpm_average - sample)
         resting_bpm_deviation /= len(self.calibration)
 
-        session.resting_bpm = resting_bpm_average
+        session.set_resting_bpm(resting_bpm_average)
 
         elapsed_seconds = int(session.now() - self.calibration_start_time)
         elapsed_minutes = zero_pad(elapsed_seconds // 60)
@@ -190,7 +190,6 @@ class Intervals:
             if self.samples > 0 and hold:
                 gui.draw_stat("Target Watts:", int(self.target_watts / self.samples), 1, 1, reading_color)
 
-
         elif session.phase == Phase.STEADY:
             alpha = 1
             reading_color = (255, 255, 255)
@@ -244,6 +243,68 @@ class Intervals:
             pygame.draw.lines(gui.screen, debug_color, False, debug_outline, 8)
 
 
+class ResultsGraph:
+    def __init__(self, session, gui):
+        self.min_time = session.log[0].time
+        self.max_time = session.log[-1].time
+        self.time_span = self.max_time - self.min_time
+
+        self.bpm_line = []
+        self.weighted_bpm_line = []
+        self.phase_lines = []
+
+        self.last_phase = 0
+
+        for event in session.log:
+            time_alpha = (event.time - self.min_time) / self.time_span
+            x_plot = gui.w * time_alpha
+            y_plot = gui.h * .5 - ((event.bpm - session.resting_bpm) * 20)
+            self.bpm_line.append((x_plot, y_plot))
+
+            y_plot = gui.h * .5 - ((event.bpm_rolling_average - session.resting_bpm) * 20)
+            self.weighted_bpm_line.append((x_plot, y_plot))
+
+            if event.phase != self.last_phase:
+                self.last_phase = event.phase
+                phase_color = "gray"
+                if event.phase == 2:
+                    phase_color = "blue"
+                if event.phase == 3:
+                    phase_color = "green"
+                if event.phase == 4:
+                    phase_color = "red"
+                self.phase_lines.append((phase_color, [(x_plot, 0), (x_plot, gui.h)]))
+
+
+    def __call__(self, gui, session):
+        gui.clear((96, 96, 96))
+        for phase_color, phase_line in self.phase_lines:
+            pygame.draw.lines(gui.screen, phase_color, False, phase_line, 2)
+
+        pygame.draw.lines(gui.screen, "blue", False, [(0, gui.h * .5), (gui.w, gui.h * .5)], 2)
+
+        pygame.draw.lines(
+            gui.screen, "black", False,
+            [(0, gui.h * .5 - (session.config.target_bpm_low * 20)),
+            (gui.w, gui.h * .5 - (session.config.target_bpm_low * 20))], 2)
+
+        pygame.draw.lines(
+            gui.screen, "black", False,
+            [(0, gui.h * .5 - (session.config.target_bpm_high * 20)),
+            (gui.w, gui.h * .5 - (session.config.target_bpm_high * 20))], 2)
+
+        pygame.draw.lines(gui.screen, "red", False, self.bpm_line, 1)
+        pygame.draw.lines(gui.screen, "white", False, self.weighted_bpm_line, 1)
+
+        target_bpm = (
+            session.resting_bpm + session.config.target_bpm_low,
+            session.resting_bpm + session.config.target_bpm_high)
+
+        gui.draw_text(f"active target: {target_bpm[0]} to {target_bpm[1]}", 10, gui.h - 50, font="smol")
+
+        gui.draw_text(f"resting bpm: {session.resting_bpm}", 10, gui.h - 100, font="smol")
+
+
 def workout_main(gui, replay_path = None):
     session = None
     if replay_path:
@@ -254,14 +315,13 @@ def workout_main(gui, replay_path = None):
 
     keys = []
 
-    session.phase = Phase.RESTING_BPM
+    session.set_phase(Phase.RESTING_BPM)
 
-    def present(skip_key, next_phase):
+    def present(skip_key):
         gui.present()
         for i in range(4):
             keys = gui.pump_events()
             if keys.count(skip_key) > 0:
-                session.phase = next_phase
                 return True
             session.sleep(.25)
         return False
@@ -269,16 +329,20 @@ def workout_main(gui, replay_path = None):
     resting_phase = RestingBPM(session)
 
     while session.phase == Phase.RESTING_BPM:
-        phase, event = session.advance()
+        event = session.advance()
         resting_phase(gui, session, event)
-        present(pygame.K_SPACE, Phase.PENDING)
+        if present(pygame.K_SPACE):
+            session.set_phase(Phase.PENDING)
+            break
 
     begin_phase = PleaseBegin()
 
     while session.phase == Phase.PENDING:
-        phase, event = session.advance()
+        event = session.advance()
         begin_phase(gui, session, event)
-        present(pygame.K_SPACE, Phase.CALIBRATION)
+        if present(pygame.K_SPACE):
+            session.set_phase(Phase.CALIBRATION)
+            break
 
     def remaining_time_str(stop_time):
         remaining_seconds = max(int(stop_time - session.now()), 0)
@@ -291,28 +355,50 @@ def workout_main(gui, replay_path = None):
     for interval in range(session.config.intervals):
 
         calibration_stop_time = session.now() + session.config.calibration_time * 60
+        if session.phase == Phase.COOLDOWN:
+            session.set_phase(Phase.CALIBRATION)
 
         while session.phase == Phase.CALIBRATION:
-            phase, event = session.advance()
-            intervals(gui, session, event, remaining_time_str(calibration_stop_time))
-            skip_requested = present(pygame.K_BACKSPACE, Phase.CALIBRATION)
+            event = session.advance()
+            skip_requested = True
+            if session.live or session.phase == event.phase:
+                intervals(gui, session, event, remaining_time_str(calibration_stop_time))
+                skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > calibration_stop_time):
-                session.phase = Phase.STEADY
+                session.set_phase(Phase.STEADY)
 
         steady_stop_time = session.now() + session.config.steady_time * 60
 
         while session.phase == Phase.STEADY:
-            phase, event = session.advance()
-            intervals(gui, session, event, remaining_time_str(steady_stop_time))
-            skip_requested = present(pygame.K_BACKSPACE, Phase.CALIBRATION)
+            event = session.advance()
+            skip_requested = True
+            if session.live or session.phase == event.phase:
+                intervals(gui, session, event, remaining_time_str(steady_stop_time))
+                skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > steady_stop_time):
-                session.phase = Phase.COOLDOWN
+                session.set_phase(Phase.COOLDOWN)
 
         cooldown_stop_time = session.now() + session.config.cooldown_time * 60
 
         while session.phase == Phase.COOLDOWN:
-            phase, event = session.advance()
-            intervals(gui, session, event, remaining_time_str(cooldown_stop_time))
-            skip_requested = present(pygame.K_BACKSPACE, Phase.CALIBRATION)
-            if skip_requested or (session.live and session.now() > steady_stop_time):
-                session.phase = Phase.CALIBRATION
+            event = session.advance()
+            skip_requested = True
+            if event is None:
+                break
+            elif session.live or session.phase == event.phase:
+                intervals(gui, session, event, remaining_time_str(cooldown_stop_time))
+                skip_requested = present(pygame.K_BACKSPACE)
+            if skip_requested or (session.live and session.now() > cooldown_stop_time):
+                # the beginning of the interval loop will seek, as will the code following
+                # said loop.
+                break
+
+    session.set_phase(Phase.RESULTS)
+    session.save_to_disk()
+
+    pygame.mouse.set_visible(True)
+    show_results = ResultsGraph(session, gui)
+    while session.phase == Phase.RESULTS:
+        show_results(gui, session)
+        if present(None):
+            break
