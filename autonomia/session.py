@@ -7,7 +7,11 @@ import os
 from enum import IntEnum
 import config
 from misc import zero_pad
-import PyRow
+
+# todo: install PyRow properly somewhere
+import os, sys
+sys.path.append(os.path.join(os.getcwd(), "PyRow"))
+from PyRow import pyrow
 
 
 class Phase(IntEnum):
@@ -71,6 +75,47 @@ class Session:
         assert(type(phase) == Phase)
         self.phase = phase
 
+    def window(self, samples, seconds):
+        if len(samples) <= 1:
+            return samples
+        last_t = samples[-1].time
+        seek = 1
+        for sample in samples[::-1]:
+            if last_t - sample.time <= seconds:
+                seek += 1
+            else:
+                break
+        start = (seek + 1) * -1
+        frame = samples[start:-1]
+        return frame
+
+    def weighted_average(rows, stat_name, exponent=0):
+        if len(rows) < 1:
+            return 0
+        elif len(rows) == 1:
+            return getattr(rows[0], stat_name)
+        elif exponent <= 0:
+            return sum([getattr(event, stat_name) for event in rows]) / len(rows)
+        else:
+            acc_v = 0
+            acc_w = 0
+            samples = [(event.time, getattr(event, stat_name)) for event in rows]
+            t1 = samples[0][0]
+            tN = samples[-1][0]
+            dt = tN - t1
+            for t, stat in samples:
+                a = (t - t1) / dt
+                a_exp = a ** exponent
+                acc_v += stat * a_exp
+                acc_w += a_exp
+            return acc_v / acc_w
+
+    def log_window(self, seconds):
+        return window(self.log, seconds)
+
+    def connect(self):
+        return True
+
     def advance(self):
         return 0
 
@@ -125,7 +170,7 @@ class Session:
 
 
 
-class RowingSession:
+class RowingSession(Session):
     """
     This class represents all of the data in a typical workout session.
     """
@@ -133,6 +178,49 @@ class RowingSession:
     def __init__(self):
         Session.__init__(self)
         self.live = True
+        self.erg = None
+
+    def connect(self):
+        for available_erg in pyrow.find():
+            self.erg = pyrow.pyrow(available_erg)
+            print("erg found!")
+            return True
+        return False
+
+    def advance(self):
+        assert(self.erg is not None)
+        query = [
+            "CSAFE_PM_GET_WORKDISTANCE",
+            "CSAFE_GETCADENCE_CMD",
+            "CSAFE_GETPOWER_CMD",
+            "CSAFE_GETHRCUR_CMD"]
+            #"CSAFE_PM_GET_STROKESTATE"]
+        reply = erg.send(query)
+
+        event = Event()
+        event.phase = self.phase
+        event.time = self.now()
+        event.bpm = reply["CSAFE_GETHRCUR_CMD"][0]
+        event.bpm_rolling_average = 0
+
+        event.cadence = reply["CSAFE_GETCADENCE_CMD"][0]
+        event.target_cadence = 0
+
+        event.watts = reply["CSAFE_GETPOWER_CMD"][0]
+        event.target_watts = 0
+
+        event.distance = sum(reply["CSAFE_PM_GET_WORKDISTANCE"][0:2]) / 10.0
+
+        window_seq = self.log_window(5)
+        window_seq.append(event)
+
+        if len(window_seq) > 1:
+            event.bpm_rolling_average = weighted_average(window_seq, "bpm", 2)
+        else:
+            event.bpm_rolling_average = event.bpm
+
+        log.append(event)
+        return event
 
 
 class ReplaySession(Session):

@@ -5,8 +5,17 @@ import sys
 import math
 import pygame
 from gui import Display
-from session import ReplaySession, Phase
+from session import RowingSession, ReplaySession, Phase
 from misc import zero_pad
+
+
+class ErgSearch:
+    def __init__(self):
+        pass
+
+    def __call__(self, gui):
+        gui.clear("gray")
+        gui.draw_text('Searching for erg...', 0, 0)
 
 
 class RestingBPM:
@@ -184,11 +193,13 @@ class Intervals:
 
             gui.draw_stat("Current Cadence:", cadence, 0, 0)
             if self.samples > 0 and hold:
-                gui.draw_stat("Target Cadence:", int(self.target_cadence / self.samples), 1, 0, reading_color)
+                event.target_cadence = int(self.target_cadence / self.samples)
+                gui.draw_stat("Target Cadence:", event.target_cadence, 1, 0, reading_color)
 
             gui.draw_stat("Current Watts:", event.watts, 0, 1)
             if self.samples > 0 and hold:
-                gui.draw_stat("Target Watts:", int(self.target_watts / self.samples), 1, 1, reading_color)
+                event.target_watts = int(self.target_watts / self.samples)
+                gui.draw_stat("Target Watts:", event.target_watts, 1, 1, reading_color)
 
         elif session.phase == Phase.STEADY:
             alpha = 1
@@ -198,6 +209,9 @@ class Intervals:
                 self.target_cadence //= self.samples
                 self.target_watts //= self.samples
                 self.samples = 1
+
+            event.target_cadence = self.target_cadence
+            event.target_watts = self.target_watts
 
             if cadence > self.target_cadence + 1 or event.watts > self.target_watts + 1:
                 alpha = math.sin(session.now() * 5) * .5 + .5
@@ -311,7 +325,7 @@ def workout_main(gui, replay_path = None):
         assert(os.path.isfile(replay_path))
         session = ReplaySession(replay_path)
     else:
-        assert(False) # todo
+        session = RowingSession()
 
     keys = []
 
@@ -325,6 +339,12 @@ def workout_main(gui, replay_path = None):
                 return True
             session.sleep(.25)
         return False
+
+    lobby = ErgSearch()
+    while not session.connect():
+        lobby(gui)
+        if present(None):
+            sys.exit(0)
 
     resting_phase = RestingBPM(session)
 
