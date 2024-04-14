@@ -1,3 +1,9 @@
 PyRow
-*rowing_log*.csv
-*rowing_log*.json
+*.csv
+*.json
+*.ogg
+__pycache__
+autonomia/__pycache__
+logs
+fnord*
+
