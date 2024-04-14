@@ -21,6 +21,8 @@ class Display:
         }
 
         self.screen = pygame.display.set_mode(flags = pygame.FULLSCREEN | pygame.NOFRAME)
+        pygame.display.set_caption("autonomia")
+
         self.w = self.screen.get_width()
         self.h = self.screen.get_height()
         self.w_over_100 = self.w / 100
