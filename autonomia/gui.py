@@ -25,6 +25,8 @@ class Display:
         self.h = self.screen.get_height()
         self.w_over_100 = self.w / 100
 
+        pygame.mouse.set_visible(False)
+
 
     def pump_events(self):
         keys = []
