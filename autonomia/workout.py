@@ -521,8 +521,8 @@ def workout_main(gui, replay_path = None):
     show_results = ResultsGraph(session, gui)
     while session.phase == Phase.RESULTS:
         show_results(gui)
-        if present(None):
-            break
+        gui.present()
+        keys = gui.pump_events()
 
 
 def viewer_main(gui):
