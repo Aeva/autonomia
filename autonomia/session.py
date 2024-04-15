@@ -233,7 +233,7 @@ class ReplaySession(Session):
         self.seek = 0
 
         self.date = self.replay["date"]
-        self.start_time = self.replay.get("start_time", "unknown time")
+        self.start_time = self.replay.get("start_time", "")
         self.resting_bpm = self.replay["resting_bpm"]
 
         self.config.intervals = self.replay["intervals"]

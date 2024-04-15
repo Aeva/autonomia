@@ -4,10 +4,11 @@ import os
 import sys
 import math
 import glob
+import copy
 import datetime
 import pygame
 from gui import Display
-from session import RowingSession, ReplaySession, Phase
+from session import RowingSession, ReplaySession, Phase, Event
 from misc import zero_pad, lerp, pretty_time
 
 
@@ -317,6 +318,88 @@ class ResultsGraph:
                 y_plot = self.margin_y2 - (bpm - self.bpm_min) * self.bpm_y_scale
                 self.bpm_lines.append((bpm, [(self.margin_x1, y_plot), (self.margin_x2, y_plot)]))
 
+        self.dedupe = [copy.copy(session.log[0])]
+        last = self.dedupe[-1]
+        for event in session.log[1:]:
+            if event.bpm != last.bpm:
+                self.dedupe[-1].time = (self.dedupe[-1].time + last.time) * .5
+                self.dedupe.append(copy.copy(event))
+            last = copy.copy(event)
+        if self.dedupe[-1] is not last:
+            self.dedupe.append(last)
+
+        self.peaks = [self.dedupe[0]]
+        for i in range(1, len(self.dedupe) - 1):
+            a = self.dedupe[i - 1]
+            b = self.dedupe[i]
+            c = self.dedupe[i + 1]
+            if (a.bpm < b.bpm and c.bpm < b.bpm) or (a.bpm > b.bpm and c.bpm > b.bpm):
+                self.peaks.append(b)
+        if self.peaks[-1] is not self.dedupe[-1]:
+            self.peaks.append(self.dedupe[-1])
+
+        self.peak_lines = []
+        for event in self.peaks:
+            x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
+            y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
+            self.peak_lines.append((x_plot, y_plot))
+
+        def pare(events, span=1):
+            min_list = []
+            max_list = []
+            for i in range(len(events)):
+                low = max(0, i - span)
+                high = max(0, i + span + 1)
+                neighbors = list([e.bpm for e in events[low:high]])
+                if events[i].bpm == min(neighbors):
+                    min_list.append(events[i])
+                if events[i].bpm == max(neighbors):
+                    max_list.append(events[i])
+            return min_list, max_list
+
+        self.peak_mins, self.peak_maxs = pare(self.peaks)
+        for i in range(1):
+            self.peak_mins = pare(self.peak_mins)[0]
+            self.peak_maxs = pare(self.peak_maxs)[1]
+
+        self.peak_min_lines = []
+        for event in self.peak_mins:
+            x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
+            y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
+            self.peak_min_lines.append((x_plot, y_plot))
+
+        self.peak_max_lines = []
+        for event in self.peak_maxs:
+            x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
+            y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
+            self.peak_max_lines.append((x_plot, y_plot))
+
+        def soften(events):
+            reduced = [copy.copy(events[0])]
+            for i in range(1, len(events) - 1):
+                a = events[i - 1]
+                b = events[i]
+                c = events[i + 1]
+
+                bpm = lerp(lerp(a.bpm, b.bpm, .5), lerp(b.bpm, c.bpm, .5), .5)
+                b = copy.copy(b)
+                b.bpm = bpm
+
+                reduced.append(b)
+            reduced.append(copy.copy(events[-1]))
+            return reduced
+
+        self.octaves = []
+        softened = self.peaks
+        for i in range(5):
+            softened = soften(softened)
+            octave = []
+            for event in softened:
+                x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
+                y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
+                octave.append((x_plot, y_plot))
+            self.octaves.append(octave)
+
         for event in session.log:
             x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
             y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
@@ -327,7 +410,7 @@ class ResultsGraph:
 
             if event.phase != self.last_phase:
                 self.last_phase = event.phase
-                phase_color = "gray"
+                phase_color = (64, 64, 64)
                 if event.phase == 2:
                     phase_color = "blue"
                 if event.phase == 3:
@@ -338,9 +421,9 @@ class ResultsGraph:
                     (phase_color, [(x_plot, self.margin_y1), (x_plot, self.margin_y2)]))
 
 
-    def __call__(self, gui):
+    def __call__(self, gui, current_mode = 0):
         session = self.session
-        gui.clear((96, 96, 96))
+        gui.clear((90, 90, 90))
 
         resting_bpm_y = self.margin_y2 - (session.resting_bpm - self.bpm_min) * self.bpm_y_scale
         target_low_y = self.margin_y2 - (self.target_bpm_low - self.bpm_min) * self.bpm_y_scale
@@ -351,11 +434,23 @@ class ResultsGraph:
         hover_y = mouse_y >= self.margin_y1 and mouse_y <= self.margin_y2
 
         pygame.draw.polygon(
+            gui.screen, (96, 96, 96),
+            [(self.margin_x1, self.margin_y1),
+             (self.margin_x1, self.margin_y2),
+             (self.margin_x2, self.margin_y2),
+             (self.margin_x2, self.margin_y1)])
+
+        pygame.draw.polygon(
             gui.screen, (80, 80, 80),
             [(self.margin_x1, target_low_y),
              (self.margin_x1, target_high_y),
              (self.margin_x2, target_high_y),
              (self.margin_x2, target_low_y)])
+
+        if current_mode == 4 or current_mode == 5:
+            pygame.draw.polygon(
+                gui.screen, (100, 100, 100),
+                self.peak_min_lines + [i for i in reversed(self.peak_max_lines)])
 
         for phase_color, phase_line in self.phase_lines:
             pygame.draw.lines(gui.screen, phase_color, False, phase_line, 2)
@@ -413,8 +508,48 @@ class ResultsGraph:
             hover_bpm = round(lerp(self.bpm_max, self.bpm_min, a))
             gui.draw_y_label(hover_bpm, self.margin_x1 - 5, mouse_y, "magenta")
 
-        pygame.draw.lines(gui.screen, "dark red", False, self.bpm_line, 1)
-        pygame.draw.lines(gui.screen, "white", False, self.weighted_bpm_line, 1)
+        if current_mode == 0:
+            gui.draw_text(
+                "unfiltered bpm & rolling average",
+                self.margin_x2, self.margin_y1, font="smol", x_align=1, y_align=1)
+            pygame.draw.lines(gui.screen, "dark red", False, self.bpm_line, 1)
+            pygame.draw.lines(gui.screen, "white", False, self.weighted_bpm_line, 1)
+
+        elif current_mode == 1:
+            gui.draw_text(
+                "unfiltered bpm", self.margin_x2, self.margin_y1, font="smol", x_align=1, y_align=1)
+            pygame.draw.lines(gui.screen, "white", False, self.bpm_line, 1)
+
+        elif current_mode == 2:
+            gui.draw_text(
+                "bpm rolling average", self.margin_x2, self.margin_y1, font="smol", x_align=1, y_align=1)
+            pygame.draw.lines(gui.screen, "white", False, self.weighted_bpm_line, 1)
+
+        elif current_mode == 3:
+            gui.draw_text(
+                "bpm peaks", self.margin_x2, self.margin_y1, font="smol", x_align=1, y_align=1)
+            pygame.draw.lines(gui.screen, "white", False, self.peak_lines, 1)
+
+        elif current_mode == 4:
+            gui.draw_text(
+                "bpm envelope", self.margin_x2, self.margin_y1, font="smol", x_align=1, y_align=1)
+            outline_color = (50, 50, 50)
+            pygame.draw.lines(gui.screen, outline_color, False, self.peak_min_lines, 4)
+            pygame.draw.lines(gui.screen, outline_color, False, self.peak_max_lines, 4)
+            pygame.draw.lines(gui.screen, "white", False, self.peak_lines, 1)
+
+        elif current_mode == 5:
+            gui.draw_text(
+                "bpm envelope & bezier", self.margin_x2, self.margin_y1, font="smol", x_align=1, y_align=1)
+            pygame.draw.lines(gui.screen, "black", False, self.peak_min_lines, 4)
+            pygame.draw.lines(gui.screen, "black", False, self.peak_max_lines, 4)
+            pygame.draw.lines(gui.screen, "white", False, self.peak_lines, 1)
+            for i, octave in enumerate(self.octaves):
+                a = (i + 1) / max(len(self.octaves), 1)
+                c = lerp(64, 0, a)
+                color = (c, c, c)
+                thickness = round(lerp(2, 6, a))
+                pygame.draw.lines(gui.screen, color, False, octave, thickness)
 
         target_bpm = (
             session.resting_bpm + session.config.target_bpm_low,
@@ -540,20 +675,27 @@ def viewer_main(gui):
         return
 
     current_view = len(views) - 1
+    current_mode = 4 # envelope mode
+    mode_count = 5 # actually 6, but I don't like the bezier mode
     while True:
         view = views[current_view]
-        view(gui)
+        view(gui, current_mode)
 
         date_label = view.session.date.replace("_", ".")
         weekday = datetime.datetime.strptime(view.session.date, "%Y_%m_%d").strftime("%A")
-
-        stamp = f"{date_label} ({weekday}) @ {view.session.start_time}"
-        gui.draw_text(stamp, view.margin_x1, 2, font="smol")
+        parts = [date_label, weekday]
+        if view.session.start_time:
+            parts.append(view.session.start_time)
+        date_label = "    ".join(parts)
+        gui.draw_text(date_label, view.margin_x1, view.margin_y1, font="smol", y_align=1)
 
         gui.present()
 
         keys = gui.pump_events()
-        if keys.count(pygame.K_LEFT):
+        if keys.count(pygame.K_RETURN):
+            current_mode = (current_mode + 1) % mode_count
+
+        elif keys.count(pygame.K_LEFT):
             current_view = max(current_view - 1, 0)
 
         elif keys.count(pygame.K_RIGHT):

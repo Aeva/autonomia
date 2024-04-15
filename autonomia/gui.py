@@ -51,12 +51,16 @@ class Display:
     def clear(self, color):
         self.screen.fill(color)
 
-    def draw_text(self, msg, x, y, color=(255, 255, 255), font="regular"):
+    def draw_text(self, msg, x, y, color=(255, 255, 255), font="regular", x_align=0, y_align=0):
         surface = self.fonts[font].render(str(msg), True, color)
         if x is None:
             x = (self.w - surface.get_width()) * .5
+        elif x_align > 0:
+            x -= surface.get_width() * x_align
         if y is None:
             y = (self.h - surface.get_height()) * .5
+        elif y_align > 0:
+            y -= surface.get_height() * y_align
         self.screen.blit(surface, (x, y))
 
     def draw_x_label(self, msg, x, y, color=(255, 255, 255), font="smol"):
