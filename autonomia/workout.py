@@ -529,12 +529,9 @@ def viewer_main(gui):
     log_paths = sorted(glob.glob("????_??_??_rowing_log*.json"))
     views = []
     for path in log_paths:
-        try:
-            session = ReplaySession(path)
-            session.set_phase(Phase.RESULTS)
-            views.append(ResultsGraph(session, gui))
-        except:
-            pass
+        session = ReplaySession(path)
+        session.set_phase(Phase.RESULTS)
+        views.append(ResultsGraph(session, gui))
 
     pygame.mouse.set_visible(True)
 

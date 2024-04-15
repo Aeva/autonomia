@@ -233,7 +233,7 @@ class ReplaySession(Session):
         self.seek = 0
 
         self.date = self.replay["date"]
-        self.start_time = self.replay["start_time"]
+        self.start_time = self.replay.get("start_time", "unknown time")
         self.resting_bpm = self.replay["resting_bpm"]
 
         self.config.intervals = self.replay["intervals"]
@@ -244,19 +244,36 @@ class ReplaySession(Session):
         self.config.target_bpm_high = self.replay["target_high"]
 
         self.replay_log = []
-        for row in self.replay["log"]:
-            phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm = row
-            e = Event()
-            e.phase = Phase(phase)
-            e.time = t
-            e.bpm = bpm
-            e.cadence = cadence
-            e.watts = watts
-            e.distance = distance
-            e.target_cadence = target_cadence
-            e.target_watts = target_watts
-            e.bpm_rolling_average = weighted_bpm
-            self.replay_log.append(e)
+
+        if len(self.replay["log"][0]) == 9:
+            for row in self.replay["log"]:
+                phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm = row
+                e = Event()
+                e.phase = Phase(phase)
+                e.time = t
+                e.bpm = bpm
+                e.cadence = cadence
+                e.watts = watts
+                e.distance = distance
+                e.target_cadence = target_cadence
+                e.target_watts = target_watts
+                e.bpm_rolling_average = weighted_bpm
+                self.replay_log.append(e)
+
+        elif len(self.replay["log"][0]) == 6:
+            for row in self.replay["log"]:
+                phase, t, bpm, cadence, watts, distance = row
+                e = Event()
+                e.phase = Phase(phase)
+                e.time = t
+                e.bpm = bpm
+                e.cadence = cadence
+                e.watts = watts
+                e.distance = distance
+                e.target_cadence = 0
+                e.target_watts = 0
+                e.bpm_rolling_average = bpm
+                self.replay_log.append(e)
 
     def now(self):
         return time.time()
