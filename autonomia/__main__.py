@@ -3,13 +3,18 @@
 import os
 import sys
 from gui import Display
-from workout import workout_main
+from workout import workout_main, viewer_main
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         gui = Display()
         workout_main(gui)
+        sys.exit(0)
+
+    elif len(sys.argv) == 2 and sys.argv[1] == "--viewer":
+        gui = Display()
+        viewer_main(gui)
         sys.exit(0)
 
     elif len(sys.argv) == 2 and sys.argv[1] == "--replay":
@@ -28,6 +33,8 @@ if __name__ == "__main__":
     else:
         print("Expected usage:")
         print(" > python autonomia")
+        print("or")
+        print(" > python autonomia --viewer")
         print("or")
         print(" > python autonomia --replay relative/path/to/rowing_log.json")
         sys.exit(1)

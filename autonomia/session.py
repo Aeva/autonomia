@@ -234,6 +234,7 @@ class ReplaySession(Session):
 
         self.date = self.replay["date"]
         self.start_time = self.replay["start_time"]
+        self.resting_bpm = self.replay["resting_bpm"]
 
         self.config.intervals = self.replay["intervals"]
         self.config.calibration_time = self.replay["calibration_time"]

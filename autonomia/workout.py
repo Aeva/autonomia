@@ -3,6 +3,7 @@
 import os
 import sys
 import math
+import glob
 import pygame
 from gui import Display
 from session import RowingSession, ReplaySession, Phase
@@ -259,6 +260,8 @@ class Intervals:
 
 class ResultsGraph:
     def __init__(self, session, gui):
+        self.session = session
+
         self.min_time = session.log[0].time
         self.max_time = session.log[-1].time
         self.time_span = self.max_time - self.min_time
@@ -290,7 +293,8 @@ class ResultsGraph:
                 self.phase_lines.append((phase_color, [(x_plot, 0), (x_plot, gui.h)]))
 
 
-    def __call__(self, gui, session):
+    def __call__(self, gui):
+        session = self.session
         gui.clear((96, 96, 96))
         for phase_color, phase_line in self.phase_lines:
             pygame.draw.lines(gui.screen, phase_color, False, phase_line, 2)
@@ -419,6 +423,45 @@ def workout_main(gui, replay_path = None):
     pygame.mouse.set_visible(True)
     show_results = ResultsGraph(session, gui)
     while session.phase == Phase.RESULTS:
-        show_results(gui, session)
+        show_results(gui)
         if present(None):
             break
+
+
+def viewer_main(gui):
+    log_paths = sorted(glob.glob("????_??_??_rowing_log*.json"))
+    views = []
+    for path in log_paths:
+        try:
+            session = ReplaySession(path)
+            session.set_phase(Phase.RESULTS)
+            views.append(ResultsGraph(session, gui))
+        except:
+            pass
+
+    pygame.mouse.set_visible(True)
+
+    if len(views) == 0:
+        print("No logs available.")
+        return
+
+    current_view = len(views) - 1
+    while True:
+        view = views[current_view]
+        view(gui)
+
+        stamp = f"{view.session.date} {view.session.start_time}"
+        gui.draw_text(stamp, None, 0, font="smol")
+
+        gui.present()
+        for i in range(4):
+            keys = gui.pump_events()
+            if keys.count(pygame.K_LEFT):
+                current_view = max(current_view - 1, 0)
+                break
+
+            if keys.count(pygame.K_RIGHT):
+                current_view = min(current_view + 1, len(views) -1)
+                break
+
+            session.sleep(.25)
