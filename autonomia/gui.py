@@ -11,9 +11,10 @@ class Display:
         pygame.init()
         pygame.font.init()
 
-        font_name = "don't care"
+        font_name = None
 
         self.fonts = {
+            "tiny" : pygame.font.SysFont(font_name, 32),
             "smol" : pygame.font.SysFont(font_name, 64),
             "regular" : pygame.font.SysFont(font_name, 96),
             "big" : pygame.font.SysFont(font_name, 200),
@@ -58,6 +59,16 @@ class Display:
             y = (self.h - surface.get_height()) * .5
         self.screen.blit(surface, (x, y))
 
+    def draw_x_label(self, msg, x, y, color=(255, 255, 255), font="smol"):
+        surface = self.fonts[font].render(str(msg), True, color)
+        x -= surface.get_width() * .5
+        self.screen.blit(surface, (x, y))
+
+    def draw_y_label(self, msg, x, y, color=(255, 255, 255), font="smol"):
+        surface = self.fonts[font].render(str(msg), True, color)
+        x -= surface.get_width()
+        y -= surface.get_height() * .5
+        self.screen.blit(surface, (x, y))
 
     def draw_stat(self, label, value, col, row, value_color=(255, 255, 255), label_color=(255, 255, 255)):
         cols = [200, 900, 1600]

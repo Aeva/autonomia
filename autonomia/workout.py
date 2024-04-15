@@ -4,10 +4,11 @@ import os
 import sys
 import math
 import glob
+import datetime
 import pygame
 from gui import Display
 from session import RowingSession, ReplaySession, Phase
-from misc import zero_pad
+from misc import zero_pad, lerp, pretty_time
 
 
 class ErgSearch:
@@ -272,13 +273,56 @@ class ResultsGraph:
 
         self.last_phase = 0
 
+        self.margin_x1 = 100
+        self.margin_x2 = gui.w - 50
+        self.margin_y1 = 50
+        self.margin_y2 = gui.h - 100
+
+        self.outline_line = [
+            (self.margin_x1, self.margin_y1),
+            (self.margin_x2, self.margin_y1),
+            (self.margin_x2, self.margin_y2),
+            (self.margin_x1, self.margin_y2)]
+
+        self.bpm_min = min(session.log[0].bpm, session.log[0].bpm_rolling_average)
+        self.bpm_max = max(session.log[0].bpm, session.log[0].bpm_rolling_average)
+
+        phase_start = session.log[0]
+        self.phases = [(0, phase_start.phase)]
+
         for event in session.log:
-            time_alpha = (event.time - self.min_time) / self.time_span
-            x_plot = gui.w * time_alpha
-            y_plot = gui.h * .5 - ((event.bpm - session.resting_bpm) * 20)
+            self.bpm_min = min(self.bpm_min, min(event.bpm, event.bpm_rolling_average))
+            self.bpm_max = max(self.bpm_max, max(event.bpm, event.bpm_rolling_average))
+            if event.phase != phase_start.phase:
+                self.phases.append((event.time - self.min_time, event.phase))
+                phase_start = event
+
+        self.bpm_min -= 5
+        self.bpm_max += 5
+
+        self.bpm_range = abs(self.bpm_max - self.bpm_min)
+        self.x_range = abs(self.margin_x2 - self.margin_x1)
+        self.y_range = abs(self.margin_y2 - self.margin_y1)
+
+        self.bpm_x_scale = 1 / self.time_span * self.x_range
+        self.bpm_y_scale = 1 / self.bpm_range * self.y_range
+
+        self.target_bpm_low = session.resting_bpm + session.config.target_bpm_low
+        self.target_bpm_high = session.resting_bpm + session.config.target_bpm_high
+
+        self.bpm_lines = []
+        for i in range(-50, 50, 5):
+            bpm = session.resting_bpm + i
+            if bpm >= self.bpm_min + 2 and bpm <= self.bpm_max - 2:
+                y_plot = self.margin_y2 - (bpm - self.bpm_min) * self.bpm_y_scale
+                self.bpm_lines.append((bpm, [(self.margin_x1, y_plot), (self.margin_x2, y_plot)]))
+
+        for event in session.log:
+            x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
+            y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
             self.bpm_line.append((x_plot, y_plot))
 
-            y_plot = gui.h * .5 - ((event.bpm_rolling_average - session.resting_bpm) * 20)
+            y_plot = self.margin_y2 - (event.bpm_rolling_average - self.bpm_min) * self.bpm_y_scale
             self.weighted_bpm_line.append((x_plot, y_plot))
 
             if event.phase != self.last_phase:
@@ -290,37 +334,93 @@ class ResultsGraph:
                     phase_color = "green"
                 if event.phase == 4:
                     phase_color = "red"
-                self.phase_lines.append((phase_color, [(x_plot, 0), (x_plot, gui.h)]))
+                self.phase_lines.append(
+                    (phase_color, [(x_plot, self.margin_y1), (x_plot, self.margin_y2)]))
 
 
     def __call__(self, gui):
         session = self.session
         gui.clear((96, 96, 96))
+
+        resting_bpm_y = self.margin_y2 - (session.resting_bpm - self.bpm_min) * self.bpm_y_scale
+        target_low_y = self.margin_y2 - (self.target_bpm_low - self.bpm_min) * self.bpm_y_scale
+        target_high_y = self.margin_y2 - (self.target_bpm_high - self.bpm_min) * self.bpm_y_scale
+
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        hover_x = mouse_x >= self.margin_x1 and mouse_x <= self.margin_x2
+        hover_y = mouse_y >= self.margin_y1 and mouse_y <= self.margin_y2
+
+        pygame.draw.polygon(
+            gui.screen, (80, 80, 80),
+            [(self.margin_x1, target_low_y),
+             (self.margin_x1, target_high_y),
+             (self.margin_x2, target_high_y),
+             (self.margin_x2, target_low_y)])
+
         for phase_color, phase_line in self.phase_lines:
             pygame.draw.lines(gui.screen, phase_color, False, phase_line, 2)
 
-        pygame.draw.lines(gui.screen, "blue", False, [(0, gui.h * .5), (gui.w, gui.h * .5)], 2)
+        for bpm, line in self.bpm_lines:
+            label_color = "gray"
+            if bpm == self.session.resting_bpm:
+                label_color = "blue"
+            if bpm == self.target_bpm_low or bpm == self.target_bpm_high:
+                label_color = "white"
+            pygame.draw.lines(gui.screen, "gray", False, line, 1)
+            gui.draw_y_label(bpm, line[0][0] - 5, line[0][1], label_color)
+
+        pygame.draw.lines(
+            gui.screen, "blue", False,
+            [(self.margin_x1, resting_bpm_y),
+             (self.margin_x2, resting_bpm_y)], 2)
 
         pygame.draw.lines(
             gui.screen, "black", False,
-            [(0, gui.h * .5 - (session.config.target_bpm_low * 20)),
-            (gui.w, gui.h * .5 - (session.config.target_bpm_low * 20))], 2)
+            [(self.margin_x1, target_low_y),
+             (self.margin_x2, target_low_y)], 2)
 
         pygame.draw.lines(
             gui.screen, "black", False,
-            [(0, gui.h * .5 - (session.config.target_bpm_high * 20)),
-            (gui.w, gui.h * .5 - (session.config.target_bpm_high * 20))], 2)
+            [(self.margin_x1, target_high_y),
+             (self.margin_x2, target_high_y)], 2)
 
-        pygame.draw.lines(gui.screen, "red", False, self.bpm_line, 1)
+        if hover_x:
+            pygame.draw.lines(
+                gui.screen, "magenta", False,
+                [(mouse_x, self.margin_y1),
+                 (mouse_x, self.margin_y2)], 1)
+            x_span_px = self.margin_x2 - self.margin_x1
+            a = (mouse_x - self.margin_x1) / x_span_px
+            hover_t = lerp(0, self.max_time - self.min_time, a)
+            gui.draw_x_label(pretty_time(hover_t), mouse_x, self.margin_y2 + 5, "magenta")
+
+            selected_phase = None
+            for time, phase in self.phases:
+                if hover_t >= time:
+                    selected_phase = str(phase._name_).lower()
+                else:
+                    break
+            if selected_phase is not None:
+                gui.draw_x_label(selected_phase, mouse_x, self.margin_y2 + 55, "gray")
+
+        if hover_y:
+            pygame.draw.lines(
+                gui.screen, "magenta", False,
+                [(self.margin_x1, mouse_y),
+                 (self.margin_x2, mouse_y)], 1)
+            y_span_px = self.margin_y2 - self.margin_y1
+            a = (mouse_y - self.margin_y1) / y_span_px
+            hover_bpm = round(lerp(self.bpm_max, self.bpm_min, a))
+            gui.draw_y_label(hover_bpm, self.margin_x1 - 5, mouse_y, "magenta")
+
+        pygame.draw.lines(gui.screen, "dark red", False, self.bpm_line, 1)
         pygame.draw.lines(gui.screen, "white", False, self.weighted_bpm_line, 1)
 
         target_bpm = (
             session.resting_bpm + session.config.target_bpm_low,
             session.resting_bpm + session.config.target_bpm_high)
 
-        gui.draw_text(f"active target: {target_bpm[0]} to {target_bpm[1]}", 10, gui.h - 50, font="smol")
-
-        gui.draw_text(f"resting bpm: {session.resting_bpm}", 10, gui.h - 100, font="smol")
+        pygame.draw.lines(gui.screen, "black", True, self.outline_line, 2)
 
 
 def workout_main(gui, replay_path = None):
@@ -369,10 +469,7 @@ def workout_main(gui, replay_path = None):
             break
 
     def remaining_time_str(stop_time):
-        remaining_seconds = max(int(stop_time - session.now()), 0)
-        remaining_minutes = zero_pad(remaining_seconds // 60)
-        remaining_seconds = zero_pad(remaining_seconds % 60)
-        return f"{remaining_minutes}:{remaining_seconds}"
+        return pretty_time(max(int(stop_time - session.now()), 0))
 
     intervals = Intervals(session)
 
@@ -450,18 +547,17 @@ def viewer_main(gui):
         view = views[current_view]
         view(gui)
 
-        stamp = f"{view.session.date} {view.session.start_time}"
-        gui.draw_text(stamp, None, 0, font="smol")
+        date_label = view.session.date.replace("_", ".")
+        weekday = datetime.datetime.strptime(view.session.date, "%Y_%m_%d").strftime("%A")
+
+        stamp = f"{date_label} ({weekday}) @ {view.session.start_time}"
+        gui.draw_text(stamp, view.margin_x1, 2, font="smol")
 
         gui.present()
-        for i in range(4):
-            keys = gui.pump_events()
-            if keys.count(pygame.K_LEFT):
-                current_view = max(current_view - 1, 0)
-                break
 
-            if keys.count(pygame.K_RIGHT):
-                current_view = min(current_view + 1, len(views) -1)
-                break
+        keys = gui.pump_events()
+        if keys.count(pygame.K_LEFT):
+            current_view = max(current_view - 1, 0)
 
-            session.sleep(.25)
+        elif keys.count(pygame.K_RIGHT):
+            current_view = min(current_view + 1, len(views) -1)
