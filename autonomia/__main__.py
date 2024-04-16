@@ -19,7 +19,7 @@ if __name__ == "__main__":
         help="replay a workout log")
 
     mutually_exclusive.add_argument(
-        "-v", "--viewer",
+        "--viewer",
         action="store_true",
         help="open the log viewer")
 
