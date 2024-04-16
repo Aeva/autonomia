@@ -1,7 +1,7 @@
 
 
 class Config:
-    def __init(self):
+    def __init__(self):
         # The target BPM offset during the steady phase.  This specifies the low end of the range.
         self.target_bpm_low = 10
 

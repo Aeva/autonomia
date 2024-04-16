@@ -21,8 +21,9 @@ class Phase(IntEnum):
     CALIBRATION = 2
     STEADY = 3
     COOLDOWN = 4
-    RESULTS = 5
-    SHUTDOWN = 6
+    FULLSTOP = 5
+    RESULTS = 6
+    SHUTDOWN = 7
 
 
 class Event:
@@ -89,7 +90,7 @@ class Session:
         frame = samples[start:-1]
         return frame
 
-    def weighted_average(rows, stat_name, exponent=0):
+    def weighted_average(self, rows, stat_name, exponent=0):
         if len(rows) < 1:
             return 0
         elif len(rows) == 1:
@@ -111,7 +112,7 @@ class Session:
             return acc_v / acc_w
 
     def log_window(self, seconds):
-        return window(self.log, seconds)
+        return self.window(self.log, seconds)
 
     def connect(self):
         return True
@@ -195,7 +196,7 @@ class RowingSession(Session):
             "CSAFE_GETPOWER_CMD",
             "CSAFE_GETHRCUR_CMD"]
             #"CSAFE_PM_GET_STROKESTATE"]
-        reply = erg.send(query)
+        reply = self.erg.send(query)
 
         event = Event()
         event.phase = self.phase
@@ -215,11 +216,11 @@ class RowingSession(Session):
         window_seq.append(event)
 
         if len(window_seq) > 1:
-            event.bpm_rolling_average = weighted_average(window_seq, "bpm", 2)
+            event.bpm_rolling_average = self.weighted_average(window_seq, "bpm", 2)
         else:
             event.bpm_rolling_average = event.bpm
 
-        log.append(event)
+        self.log.append(event)
         return event
 
 
