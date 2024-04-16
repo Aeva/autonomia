@@ -116,8 +116,9 @@ class PleaseBegin:
 
 
 class Intervals:
-    def __init__(self, session):
+    def __init__(self, session, bpm_debug):
 
+        self.bpm_debug = bpm_debug
         self.current_interval = 0
 
         self.target_bpm_low = session.resting_bpm + session.config.target_bpm_low
@@ -247,7 +248,7 @@ class Intervals:
 
             gui.draw_text(f"Cool Down {remaining_time}", 0, 0)
 
-        if not session.live:
+        if self.bpm_debug:
             debug_color = (64, 64, 64)
             gui.draw_stat("Rolling BPM:", event.bpm, 2, 0, debug_color, debug_color)
             gui.draw_stat("Resting BPM:", session.resting_bpm, 2, 1, debug_color, debug_color)
@@ -586,7 +587,7 @@ class ResultsGraph:
         pygame.draw.lines(gui.screen, "black", True, self.outline_line, 2)
 
 
-def workout_main(gui, replay_path = None):
+def workout_main(gui, replay_path = None, no_save = False, bpm_debug = False):
     session = None
     if replay_path:
         assert(os.path.isfile(replay_path))
@@ -634,7 +635,7 @@ def workout_main(gui, replay_path = None):
     def remaining_time_str(stop_time):
         return pretty_time(max(int(stop_time - session.now()), 0))
 
-    intervals = Intervals(session)
+    intervals = Intervals(session, bpm_debug)
 
     for interval in range(session.config.intervals):
 
@@ -688,7 +689,8 @@ def workout_main(gui, replay_path = None):
             break
 
     session.set_phase(Phase.RESULTS)
-    session.save_to_disk()
+    if not no_save:
+        session.save_to_disk()
 
     # automatically open up the workout viewer
     viewer_main(gui)
