@@ -440,12 +440,14 @@ class ResultsGraph:
             if event.phase != self.last_phase:
                 self.last_phase = event.phase
                 phase_color = (64, 64, 64)
-                if event.phase == 2:
+                if event.phase == Phase.CALIBRATION:
                     phase_color = "blue"
-                if event.phase == 3:
+                if event.phase == Phase.STEADY:
                     phase_color = "green"
-                if event.phase == 4:
+                if event.phase == Phase.COOLDOWN:
                     phase_color = "red"
+                if event.phase == Phase.FULLSTOP:
+                    phase_color = "dark red"
                 self.phase_lines.append(
                     (phase_color, [(x_plot, self.margin_y1), (x_plot, self.margin_y2)]))
 
