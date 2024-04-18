@@ -589,11 +589,11 @@ class ResultsGraph:
         pygame.draw.lines(gui.screen, "black", True, self.outline_line, 2)
 
 
-def workout_main(gui, replay_path = None, no_save = False, bpm_debug = False):
+def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
     session = None
     if replay_path:
         assert(os.path.isfile(replay_path))
-        session = ReplaySession(replay_path)
+        session = ReplaySession(replay_path, replay_speed)
     else:
         session = RowingSession()
 

@@ -225,11 +225,16 @@ class RowingSession(Session):
 
 
 class ReplaySession(Session):
-    def __init__(self, replay_path):
+    def __init__(self, replay_path, replay_speed):
         Session.__init__(self)
 
         with open(replay_path, "r") as infile:
             self.replay = json.loads(infile.read())
+
+        self.speed_override = replay_speed
+        if self.speed_override is not None:
+            assert(type(self.speed_override) == float)
+            self.speed = self.speed_override
 
         self.seek = 0
 
@@ -284,12 +289,13 @@ class ReplaySession(Session):
             time.sleep(seconds * self.speed)
 
     def update_speed(self):
-        if self.phase < Phase.CALIBRATION:
-            self.speed = .001
-        elif self.phase < Phase.RESULTS:
-            self.speed = 0
-        else:
-            self.speed = 1
+        if self.speed_override is None:
+            if self.phase < Phase.CALIBRATION:
+                self.speed = .001
+            elif self.phase < Phase.RESULTS:
+                self.speed = 0
+            else:
+                self.speed = 1
 
     def set_resting_bpm(self, resting_bpm):
         self.resting_bpm = self.replay["resting_bpm"]

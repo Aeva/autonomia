@@ -38,6 +38,13 @@ if __name__ == "__main__":
         action="store_true",
         help="don't save the log for this run")
 
+    parser.add_argument(
+        "--speed",
+        action="store",
+        type=float,
+        default=None,
+        help="replay speed multiplier")
+
     args = parser.parse_args()
 
     if args.viewer:
@@ -48,8 +55,17 @@ if __name__ == "__main__":
     elif args.replay:
         replay_path = args.replay
         if os.path.isfile(replay_path):
+            speed_divisor = None
+            if args.speed:
+                speed_divisor = 1 / args.speed
+
             gui = Display()
-            workout_main(gui, replay_path=replay_path, no_save=args.no_save, bpm_debug=args.bpm_debug)
+            workout_main(
+                gui,
+                replay_path = replay_path,
+                replay_speed = speed_divisor,
+                no_save = args.no_save,
+                bpm_debug = args.bpm_debug)
         else:
             print("Replay file not found.")
             sys.exit(1)
