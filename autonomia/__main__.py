@@ -1,6 +1,11 @@
 
-
 import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+import warnings
+warnings.simplefilter("ignore")
+import pygame
+warnings.resetwarnings()
+
 import sys
 import argparse
 import pathlib
