@@ -45,11 +45,16 @@ if __name__ == "__main__":
         default=None,
         help="replay speed multiplier")
 
+    parser.add_argument(
+        "--global_bpm_range",
+        action="store_true",
+        help="plot bpm on a global scale")
+
     args = parser.parse_args()
 
     if args.viewer:
         gui = Display()
-        viewer_main(gui)
+        viewer_main(gui, normalized_bpm_range=args.global_bpm_range)
         sys.exit(0)
 
     elif args.replay:

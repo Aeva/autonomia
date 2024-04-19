@@ -290,7 +290,7 @@ class FullStop:
 
 
 class ResultsGraph:
-    def __init__(self, session, gui):
+    def __init__(self, session, gui, bpm_stats, global_bpm):
         self.session = session
 
         self.min_time = session.log[0].time
@@ -314,23 +314,16 @@ class ResultsGraph:
             (self.margin_x2, self.margin_y2),
             (self.margin_x1, self.margin_y2)]
 
-        self.bpm_min = min(session.log[0].bpm, session.log[0].bpm_rolling_average)
-        self.bpm_max = max(session.log[0].bpm, session.log[0].bpm_rolling_average)
-
         phase_start = session.log[0]
         self.phases = [(0, phase_start.phase)]
 
         for event in session.log:
-            self.bpm_min = min(self.bpm_min, min(event.bpm, event.bpm_rolling_average))
-            self.bpm_max = max(self.bpm_max, max(event.bpm, event.bpm_rolling_average))
             if event.phase != phase_start.phase:
                 self.phases.append((event.time - self.min_time, event.phase))
                 phase_start = event
 
-        self.bpm_min -= 5
-        self.bpm_max += 5
+        self.bpm_min, self.bpm_max, self.bpm_range = bpm_stats
 
-        self.bpm_range = abs(self.bpm_max - self.bpm_min)
         self.x_range = abs(self.margin_x2 - self.margin_x1)
         self.y_range = abs(self.margin_y2 - self.margin_y1)
 
@@ -341,8 +334,11 @@ class ResultsGraph:
         self.target_bpm_high = session.resting_bpm + session.config.target_bpm_high
 
         self.bpm_lines = []
-        for i in range(-50, 50, 5):
-            bpm = session.resting_bpm + i
+        for i in range(-100, 100, 5):
+            if global_bpm:
+                bpm = math.floor(self.bpm_min + self.bpm_range * .5) + i
+            else:
+                bpm = session.resting_bpm + i
             if bpm >= self.bpm_min + 2 and bpm <= self.bpm_max - 2:
                 y_plot = self.margin_y2 - (bpm - self.bpm_min) * self.bpm_y_scale
                 self.bpm_lines.append((bpm, [(self.margin_x1, y_plot), (self.margin_x2, y_plot)]))
@@ -698,13 +694,41 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
     viewer_main(gui)
 
 
-def viewer_main(gui):
+def find_bpm_min_max(sessions, margin=5):
+    bpm_min = math.inf
+    bpm_max = 0
+
+    for session in sessions:
+        for event in session.log:
+            bpm_min = min(bpm_min, min(event.bpm, event.bpm_rolling_average))
+            bpm_max = max(bpm_max, max(event.bpm, event.bpm_rolling_average))
+
+    bpm_min -= margin
+    bpm_max += margin
+    bpm_range = abs(bpm_max - bpm_min)
+
+    return bpm_min, bpm_max, bpm_range
+
+
+def viewer_main(gui, normalized_bpm_range = False):
     log_paths = sorted(glob.glob("????_??_??_rowing_log*.json"))
-    views = []
+
+    sessions = []
     for path in log_paths:
         session = ReplaySession(path)
         session.set_phase(Phase.RESULTS)
-        views.append(ResultsGraph(session, gui))
+        sessions.append(session)
+
+    views = []
+    if normalized_bpm_range:
+        bpm_stats = find_bpm_min_max(sessions)
+        views = [ResultsGraph(session, gui, bpm_stats, True) for session in sessions]
+
+    else:
+        for session in sessions:
+            bpm_stats = find_bpm_min_max([session])
+            views.append(ResultsGraph(session, gui, bpm_stats, False))
+
 
     pygame.mouse.set_visible(True)
 
