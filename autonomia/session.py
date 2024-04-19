@@ -225,7 +225,7 @@ class RowingSession(Session):
 
 
 class ReplaySession(Session):
-    def __init__(self, replay_path, replay_speed):
+    def __init__(self, replay_path, replay_speed = None):
         Session.__init__(self)
 
         with open(replay_path, "r") as infile:
