@@ -4,6 +4,10 @@ import math
 import time
 
 
+def lerp(x, y, a):
+    return x * (1 - a) + y * a
+
+
 def main():
     gui = Display()
 
@@ -13,48 +17,66 @@ def main():
     x2 = gui.w
     y2 = gui.h
 
-    def draw_line(color, points, width):
-        pygame.draw.lines(gui.screen, color, False, points, width)
-
-    def flow_y(color, points, width):
+    def draw_line(s, color, points, width):
         points = [(int(x), int(y)) for (x, y) in points]
-        draw_line(color, points, width)
+        pygame.draw.lines(s, color, False, points, width)
 
     start = time.time()
 
-    i = 0
+    lanes = 7
+    inv_lanes = 1 / lanes
+
+    lane_y = [0 for lane in range(lanes)]
+
+    bg_color = (0, 0, 0)
+    fg_color = (255, 255, 0, 255)
+
     while True:
         keys = gui.pump_events()
-        gui.clear((0, 0, 0))
-
-        lanes = 7
-        inv_lanes = 1 / lanes
-
         t = time.time() - start
-        t = abs(math.sin(t * 2 * math.pi * (60 / 120))) * 1.5
-        t = t*t*t
 
-        i = (i + t) % gui.h
+        gui.clear(bg_color)
 
-        c = 5
-        s = gui.h / c
-        w = math.ceil(s / 2)
+        bpm = 120
+        dist = 1.5
 
-        for n in range(-c * 2, c):
-            y = int(n * s)
+        stamp_w = gui.w * inv_lanes
+        stamp_h = gui.h
 
-            flow_y(
-                (255, 255, 0),
-                [(x1, y1 + i + y),
-                 (x2 * .5, y2 + i + y),
-                 (x2, y1 + i + y)],
-                width = w)
+        stamp = pygame.Surface((stamp_w, stamp_h), flags=pygame.SRCALPHA)
 
-        r = pygame.Rect(((x2 - x2 * inv_lanes) * .5, y1), (gui.w * inv_lanes, gui.h))
+        line_count = 11
+        line_space = gui.h / line_count
+        line_width = math.ceil(line_space / 2)
 
-        subsurf = gui.screen.subsurface(r).copy()
+        if True:
+            stamp_left = stamp_w * -1
+            stamp_right = stamp_w * 2
+            stamp_top = stamp_h - stamp_w * 2 * (gui.h / gui.w)
+            stamp_bottom = stamp_h
+
+            draw_line(
+                stamp, fg_color,
+                [(lerp(stamp_left, stamp_right, 0), stamp_top),
+                 (lerp(stamp_left, stamp_right, .5), stamp_bottom),
+                 (lerp(stamp_left, stamp_right, 1), stamp_top)],
+                width = line_width)
+
         for lane in range(lanes):
-            gui.screen.blit(subsurf, (x2 * inv_lanes * lane, y1))
+            lane_a = lane / (lanes - 1)
+            lane_a = abs(lane_a * 2 - 1)
+            lane_a = lane_a * lane_a
+            lane_push = lerp(.04, 0, lane_a)
+            #print(lane_bpm)
+
+            a = abs(math.sin((t + lane_push) * 2 * math.pi * (60 / bpm))) * dist
+            a = a*a*a
+            y = lane_y[lane] = (lane_y[lane] + a) % gui.h
+
+            for line in range(line_count * -2, line_count):
+                blit_x = math.floor(x2 * inv_lanes) * lane
+                blit_y = int(line * line_space) + y
+                gui.screen.blit(stamp, (blit_x, blit_y))
 
         gui.present()
 
