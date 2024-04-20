@@ -21,45 +21,63 @@ def main():
         points = [(int(x), int(y)) for (x, y) in points]
         pygame.draw.lines(s, color, False, points, width)
 
-
-
     lanes = 7
     line_count = 11
+
+    pages = 2
 
     bpm = 120
     dist = 1.5
 
-    bg_color = (0, 0, 0)
-    fg_color = (255, 255, 0, 255)
+    fg_color_1 = (255, 255, 0, 255)
+    fg_color_2 = (128, 0, 192, 255)
+
+    bg_color_1 = (0, 0, 0, 255)
+    bg_color_2 = (128, 0, 0, 255)
+
+    mask_color = (255, 255, 255, 255)
+    erase_color = (0, 0, 0, 0)
 
     inv_lanes = 1 / lanes
     stamp_w = gui.w * inv_lanes
     stamp_h = gui.h
 
-    stamp = pygame.Surface((stamp_w, stamp_h), flags=pygame.SRCALPHA)
-
     line_space = gui.h / line_count
     line_width = math.ceil(line_space / 2)
+    erase_width = line_width // 8
 
-    if True:
-        stamp_left = stamp_w * -1
-        stamp_right = stamp_w * 2
-        stamp_top = stamp_h - stamp_w * 2 * (gui.h / gui.w)
-        stamp_bottom = stamp_h
+    stamp = pygame.Surface((stamp_w, stamp_h), flags=pygame.SRCALPHA)
 
-        draw_line(
-            stamp, fg_color,
-            [(lerp(stamp_left, stamp_right, 0), stamp_top),
-                (lerp(stamp_left, stamp_right, .5), stamp_bottom),
-                (lerp(stamp_left, stamp_right, 1), stamp_top)],
-            width = line_width)
+    stamp_left = stamp_w * -1
+    stamp_right = stamp_w * 2
+    stamp_top = stamp_h - stamp_w * 2 * (gui.h / gui.w)
+    stamp_bottom = stamp_h
+
+    draw_line(
+        stamp, mask_color,
+        [(lerp(stamp_left, stamp_right, 0), stamp_top),
+            (lerp(stamp_left, stamp_right, .5), stamp_bottom),
+            (lerp(stamp_left, stamp_right, 1), stamp_top)],
+        width = line_width)
+
+    draw_line(
+        stamp, erase_color,
+        [(0, stamp_top),
+            (0, stamp_bottom)],
+        width=erase_width)
+
+    draw_line(
+        stamp, erase_color,
+        [(stamp_w, stamp_top),
+            (stamp_w, stamp_bottom)],
+        width=erase_width)
 
     reel_w = stamp_w
-    reel_h = gui.h * 2
+    reel_h = gui.h * pages
     reel = pygame.Surface((reel_w, reel_h), flags=pygame.SRCALPHA)
 
     if True:
-        for line in range(line_count * 2):
+        for line in range(line_count * (pages + 1)):
             blit_x = 0
             blit_y = gui.h + int(-line * line_space)
             reel.blit(stamp, (blit_x, blit_y))
@@ -67,11 +85,37 @@ def main():
     start = time.time()
     lane_y = [0 for lane in range(lanes)]
 
+    mask = gui.screen.copy()
+    inv_mask = gui.screen.copy()
+
+    fg_surf = gui.screen.copy()
+    bg_surf = gui.screen.copy()
+
+    def fill_gradient(surface, color_a, color_b, count = 100):
+        w = surface.get_width()
+        h = surface.get_height()
+        stride = math.ceil(h / (count))
+        half_stride = stride * .5
+
+        for index in range(count):
+            alpha = index / (count - 1)
+            y = lerp(half_stride, h - half_stride, alpha)
+            color = tuple([lerp(color_a[c], color_b[c], alpha) for c in range(4)])
+            draw_line(
+                surface, color,
+                [(0, y),
+                (w, y)],
+                width=math.ceil(stride) + 1)
+
+    #fg_surf.fill(fg_color_1)
+    fill_gradient(fg_surf, fg_color_1, fg_color_2)
+
+    #bg_surf.fill(bg_color)
+    fill_gradient(bg_surf, bg_color_1, bg_color_2)
+
     while True:
         keys = gui.pump_events()
         t = time.time() - start
-
-        gui.clear(bg_color)
 
         blit_seq = []
 
@@ -83,13 +127,23 @@ def main():
 
             a = abs(math.sin((t + lane_push) * 2 * math.pi * (60 / bpm))) * dist
             a = a*a*a
-            y = lane_y[lane] = (lane_y[lane] + a) % gui.h
+            y = lane_y[lane] = (lane_y[lane] + a) % (gui.h * max((pages // 2 - 1), 1))
 
             blit_x = math.floor(x2 * inv_lanes) * lane
-            blit_y = reel_h * -.5 + y
-            blit_seq.append((reel, (blit_x, blit_y)))
+            blit_y = reel_h / -pages + y
+            blit_seq.append((reel, (blit_x, blit_y), None, pygame.BLEND_RGBA_ADD))
 
-        gui.screen.blits(blit_seq)
+        mask.fill((0, 0, 0, 0))
+        mask.blits(blit_seq)
+
+        inv_mask.fill((255, 255, 255, 255))
+        inv_mask.blit(mask, (0, 0), None, pygame.BLEND_RGBA_SUB)
+
+        mask.blit(fg_surf, (0, 0), None, pygame.BLEND_RGBA_MULT)
+        inv_mask.blit(bg_surf, (0, 0), None, pygame.BLEND_RGBA_MULT)
+
+        gui.screen.blit(mask, (0, 0))
+        gui.screen.blit(inv_mask, (0, 0), None, pygame.BLEND_RGBA_ADD)
 
         gui.present()
 
