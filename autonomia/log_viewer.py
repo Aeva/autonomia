@@ -230,7 +230,9 @@ class ResultsGraph:
             x_span_px = self.margin_x2 - self.margin_x1
             a = (mouse_x - self.margin_x1) / x_span_px
             hover_t = lerp(0, self.max_time - self.min_time, a)
-            gui.draw_x_label(pretty_time(hover_t), mouse_x, self.margin_y2 + 5, "magenta")
+            anchor = (gui.h - self.margin_y2) * .5 + self.margin_y2
+
+            gui.draw_x_label(pretty_time(hover_t), mouse_x, anchor, "magenta", y_align=1)
 
             selected_phase = None
             for time, phase in self.phases:
@@ -239,7 +241,7 @@ class ResultsGraph:
                 else:
                     break
             if selected_phase is not None:
-                gui.draw_x_label(selected_phase, mouse_x, self.margin_y2 + 55, "gray")
+                gui.draw_x_label(selected_phase, mouse_x, anchor, "gray", y_align=0)
 
         if hover_y:
             pygame.draw.lines(
