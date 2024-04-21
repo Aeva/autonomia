@@ -21,7 +21,7 @@ class Display:
             "bigger" : pygame.font.SysFont(font_name, 400),
         }
 
-        self.screen = pygame.display.set_mode(flags = pygame.FULLSCREEN | pygame.NOFRAME)
+        self.screen = pygame.display.set_mode(flags = pygame.FULLSCREEN | pygame.NOFRAME, vsync=True)
         pygame.display.set_caption("autonomia")
 
         self.w = self.screen.get_width()

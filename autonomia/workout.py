@@ -250,6 +250,15 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
 
     intervals = IntervalRunner(session, bpm_debug)
 
+    def interval_present(skip_key):
+        gui.present()
+        for i in range(4):
+            keys = gui.pump_events()
+            if keys.count(skip_key) > 0:
+                return True
+            session.sleep(.25)
+        return False
+
     for interval in range(session.config.intervals):
 
         calibration_stop_time = session.now() + session.config.calibration_time * 60
@@ -258,11 +267,19 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
 
         while session.phase == Phase.CALIBRATION:
             event = session.advance()
-            skip_requested = True
+            skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
-                intervals.draw(gui, session, remaining_time_str(calibration_stop_time))
-                skip_requested = present(pygame.K_BACKSPACE)
+                for i in range(15):
+                    intervals.draw(gui, session, remaining_time_str(calibration_stop_time))
+                    gui.present()
+                    if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
+                        skip_requested = True
+                        break
+                    session.sleep(1/15)
+            else:
+                skip_requested = True
+
             if skip_requested or (session.live and session.now() > calibration_stop_time):
                 session.set_phase(Phase.STEADY)
 
@@ -270,11 +287,19 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
 
         while session.phase == Phase.STEADY:
             event = session.advance()
-            skip_requested = True
+            skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
-                intervals.draw(gui, session, remaining_time_str(steady_stop_time))
-                skip_requested = present(pygame.K_BACKSPACE)
+                for i in range(15):
+                    intervals.draw(gui, session, remaining_time_str(steady_stop_time))
+                    gui.present()
+                    if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
+                        skip_requested = True
+                        break
+                    session.sleep(1/15)
+            else:
+                skip_requested = True
+
             if skip_requested or (session.live and session.now() > steady_stop_time):
                 session.set_phase(Phase.COOLDOWN)
 
