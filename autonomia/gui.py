@@ -143,12 +143,19 @@ class Display:
     def draw_y_label(self, msg, x, y, color=(255, 255, 255), font="smol", x_align=1):
         self.draw_text(msg, x, y, color, font, x_align = x_align, y_align = .5)
 
-    def draw_stat(self, label, value, col, row, value_color=(255, 255, 255), label_color=(255, 255, 255)):
+    def draw_stat(self, label, value, col, row,
+                  value_color=(255, 255, 255),
+                  label_color=(255, 255, 255),
+                  wiggle=False):
         cols = [200, 900, 1600]
         rows = [200, 600]
         label_x = cols[col]
         label_y = rows[row]
         value_x = cols[col]
         value_y = rows[row] + 96
+
+        if wiggle:
+            value_y += math.sin(time.time() * math.pi * 10) * 5
+
         self.draw_text(label, label_x, label_y, label_color, "regular")
         self.draw_text(value, value_x, value_y, value_color, "bigger")

@@ -12,7 +12,8 @@ class FullStop:
 
         gui.draw_stat(
             "Current BPM:", event.bpm, 0, 0,
-            label_color=calming_color, value_color=calming_color)
+            label_color=calming_color, value_color=calming_color, wiggle = event.bpm > session.resting_bpm)
+
         gui.draw_stat(
             "Resting BPM:", session.resting_bpm, 1, 0,
             label_color=calming_color, value_color=calming_color)

@@ -30,7 +30,9 @@ class PleaseBegin:
     def __call__(self, gui, session, event):
         gui.clear((96, 96, 128))
 
-        gui.draw_stat("Current BPM:", event.bpm, 0, 0)
+        wiggle_bpm = (event.bpm - session.resting_bpm) >= 10
+
+        gui.draw_stat("Current BPM:", event.bpm, 0, 0, wiggle = wiggle_bpm)
         gui.draw_stat("Resting BPM:", session.resting_bpm, 1, 0)
         gui.draw_text("please begin", 700, None, font="big")
 
@@ -159,6 +161,9 @@ class IntervalRunner:
             alpha = 1
             reading_color = (255, 255, 255)
 
+            wiggle_cadence = abs(self.current_cadence - self.target_cadence) > 1
+            wiggle_watts = abs(self.current_watts - self.target_watts) > 1
+
             if self.current_cadence > self.target_cadence + 1 or self.current_watts > self.target_watts + 1:
                 alpha = math.sin(session.now() * 5) * .5 + .5
                 reading_color = (255 * alpha, 255 * alpha, 255)
@@ -177,11 +182,11 @@ class IntervalRunner:
 
             gui.draw_text(f"Remaining Time {remaining_time}", 0, 0)
 
-            gui.draw_stat("Current Cadence:", self.current_cadence, 0, 0)
-            gui.draw_stat("Target Cadence:", self.target_cadence, 1, 0, reading_color)
+            gui.draw_stat("Current Cadence:", self.current_cadence, 0, 0, wiggle=wiggle_cadence)
+            gui.draw_stat("Target Cadence:", self.target_cadence, 1, 0)
 
-            gui.draw_stat("Current Watts:", self.current_watts, 0, 1)
-            gui.draw_stat("Target Watts:", self.target_watts, 1, 1, reading_color)
+            gui.draw_stat("Current Watts:", self.current_watts, 0, 1, wiggle=wiggle_watts)
+            gui.draw_stat("Target Watts:", self.target_watts, 1, 1)
 
         elif session.phase == Phase.COOLDOWN:
             gui.clear((96, 96, 128))
@@ -240,10 +245,13 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
 
     while session.phase == Phase.PENDING:
         event = session.advance()
-        begin_phase(gui, session, event)
-        if present(pygame.K_SPACE):
-            session.set_phase(Phase.CALIBRATION)
-            break
+        for i in range(60):
+            begin_phase(gui, session, event)
+            gui.present()
+            if gui.pump_events().count(pygame.K_SPACE) > 0:
+                session.set_phase(Phase.CALIBRATION)
+                break
+            session.sleep(1/60)
 
     def remaining_time_str(stop_time):
         return pretty_time(max(int(stop_time - session.now()), 0))
@@ -290,13 +298,13 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
-                for i in range(15):
+                for i in range(60):
                     intervals.draw(gui, session, remaining_time_str(steady_stop_time))
                     gui.present()
                     if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
                         break
-                    session.sleep(1/15)
+                    session.sleep(1/60)
             else:
                 skip_requested = True
 
