@@ -1,4 +1,3 @@
-from autonomia.gui import Display
 import pygame
 import math
 import time
@@ -8,14 +7,29 @@ def lerp(x, y, a):
     return x * (1 - a) + y * a
 
 
+def pump_events():
+    keys = []
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            sys.exit(0)
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                sys.exit(0)
+            else:
+                keys.append(event.key)
+    return keys
+
+
 def main():
-    gui = Display()
+    screen = pygame.display.set_mode(flags = pygame.FULLSCREEN | pygame.NOFRAME, vsync=True)
+    gui_w = screen.get_width()
+    gui_h = screen.get_height()
 
     x1 = 0
     y1 = 0
 
-    x2 = gui.w
-    y2 = gui.h
+    x2 = gui_w
+    y2 = gui_h
 
     def draw_line(s, color, points, width):
         points = [(int(x), int(y)) for (x, y) in points]
@@ -39,10 +53,10 @@ def main():
     erase_color = (0, 0, 0, 0)
 
     inv_lanes = 1 / lanes
-    stamp_w = gui.w * inv_lanes
-    stamp_h = gui.h
+    stamp_w = gui_w * inv_lanes
+    stamp_h = gui_h
 
-    line_space = gui.h / line_count
+    line_space = gui_h / line_count
     line_width = math.ceil(line_space / 2)
     erase_width = line_width // 8
 
@@ -50,7 +64,7 @@ def main():
 
     stamp_left = stamp_w * -1
     stamp_right = stamp_w * 2
-    stamp_top = stamp_h - stamp_w * 2 * (gui.h / gui.w)
+    stamp_top = stamp_h - stamp_w * 2 * (gui_h / gui_w)
     stamp_bottom = stamp_h
 
     draw_line(
@@ -73,23 +87,23 @@ def main():
         width=erase_width)
 
     reel_w = stamp_w
-    reel_h = gui.h * pages
+    reel_h = gui_h * pages
     reel = pygame.Surface((reel_w, reel_h), flags=pygame.SRCALPHA)
 
     if True:
         for line in range(line_count * (pages + 1)):
             blit_x = 0
-            blit_y = gui.h + int(-line * line_space)
+            blit_y = gui_h + int(-line * line_space)
             reel.blit(stamp, (blit_x, blit_y))
 
     start = time.time()
     lane_y = [0 for lane in range(lanes)]
 
-    mask = gui.screen.copy()
-    inv_mask = gui.screen.copy()
+    mask = screen.copy()
+    inv_mask = screen.copy()
 
-    fg_surf = gui.screen.copy()
-    bg_surf = gui.screen.copy()
+    fg_surf = screen.copy()
+    bg_surf = screen.copy()
 
     def fill_gradient(surface, color_a, color_b, count = 100):
         w = surface.get_width()
@@ -114,7 +128,7 @@ def main():
     fill_gradient(bg_surf, bg_color_1, bg_color_2)
 
     while True:
-        keys = gui.pump_events()
+        keys = pump_events()
         t = time.time() - start
 
         blit_seq = []
@@ -127,7 +141,7 @@ def main():
 
             a = abs(math.sin((t + lane_push) * 2 * math.pi * (60 / bpm))) * dist
             a = a*a*a
-            y = lane_y[lane] = (lane_y[lane] + a) % (gui.h * max((pages // 2 - 1), 1))
+            y = lane_y[lane] = (lane_y[lane] + a) % (gui_h * max((pages // 2 - 1), 1))
 
             blit_x = math.floor(x2 * inv_lanes) * lane
             blit_y = reel_h / -pages + y
@@ -142,10 +156,10 @@ def main():
         mask.blit(fg_surf, (0, 0), None, pygame.BLEND_RGBA_MULT)
         inv_mask.blit(bg_surf, (0, 0), None, pygame.BLEND_RGBA_MULT)
 
-        gui.screen.blit(mask, (0, 0))
-        gui.screen.blit(inv_mask, (0, 0), None, pygame.BLEND_RGBA_ADD)
+        screen.blit(mask, (0, 0))
+        screen.blit(inv_mask, (0, 0), None, pygame.BLEND_RGBA_ADD)
 
-        gui.present()
+        pygame.display.flip()
 
 
 if __name__ == "__main__":
