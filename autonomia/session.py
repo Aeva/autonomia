@@ -10,8 +10,8 @@ from misc import zero_pad
 
 # todo: install PyRow properly somewhere
 import os, sys
-sys.path.append(os.path.join(os.getcwd(), "PyRow"))
-from PyRow import pyrow
+sys.path.append(os.path.join(os.getcwd(), "..", "PyRow"))
+import pyrow
 
 
 class Phase(IntEnum):
