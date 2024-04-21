@@ -35,7 +35,7 @@ class PleaseBegin:
         gui.draw_text("please begin", 700, None, font="big")
 
 
-class Intervals:
+class IntervalRunner:
     def __init__(self, session, bpm_debug):
 
         self.bpm_debug = bpm_debug
@@ -58,6 +58,10 @@ class Intervals:
 
         self.workout_start_time = session.now()
 
+        self.current_cadence = 0
+        self.current_watts = 0
+        self.current_rolling_bpm = 0
+
     def filter_cadence(self, cadence):
         if cadence < 35:
             self.last_valid_cadence = cadence
@@ -71,64 +75,39 @@ class Intervals:
         else:
             return 0
 
-    def __call__(self, gui, session, event, remaining_time):
-        gui.clear((96, 64, 128))
-
-        cadence = self.filter_cadence(event.cadence)
+    def update(self, session, event):
+        self.current_cadence = self.filter_cadence(event.cadence)
+        self.current_watts = event.watts
+        self.current_rolling_bpm = event.bpm_rolling_average
 
         if session.phase == Phase.CALIBRATION:
-            alpha = 1
-            reading_color = (255, 255, 255)
-
             hold = False
 
-            if event.bpm_rolling_average < self.target_bpm_low:
-                alpha = math.sin(session.now() * 5) * .5 + .5
-                reading_color = (255, 255 * alpha, 255 * alpha)
-                gui.clear((0, 128, 0))
-                gui.draw_text("increase speed", 100, 1200, (alpha, alpha, alpha), font="bigger")
-
+            if self.current_rolling_bpm < self.target_bpm_low:
                 # reset the calibration targets
-                self.target_cadence = cadence
+                self.target_cadence = self.current_cadence
                 self.target_watts = event.watts
                 self.samples = 1
 
-            elif event.bpm_rolling_average > self.target_bpm_high:
-                alpha = math.sin(session.now() * 5) * .5 + .5
-                reading_color = (255 * alpha, 255 * alpha, 255)
-                gui.clear((128, 0, 0))
-                gui.draw_text("decrease speed", 100, 1200, (alpha, alpha, alpha), font="bigger")
-
+            elif self.current_rolling_bpm > self.target_bpm_high:
                 # reset the calibration targets
-                self.target_cadence = cadence
+                self.target_cadence = self.current_cadence
                 self.target_watts = event.watts
                 self.samples = 1
 
             else:
-                gui.clear((96, 64, 128))
-                gui.draw_text("perfect.  hold.", 100, 1200, font="bigger")
-
-                self.target_cadence += cadence
+                self.target_cadence += self.current_cadence
                 self.target_watts += event.watts
                 self.samples += 1
                 hold = True
 
-            gui.draw_text(f"Remaining Calibration Time {remaining_time}", 0, 0)
-
-            gui.draw_stat("Current Cadence:", cadence, 0, 0)
             if self.samples > 0 and hold:
                 event.target_cadence = int(self.target_cadence / self.samples)
-                gui.draw_stat("Target Cadence:", event.target_cadence, 1, 0, reading_color)
 
-            gui.draw_stat("Current Watts:", event.watts, 0, 1)
             if self.samples > 0 and hold:
                 event.target_watts = int(self.target_watts / self.samples)
-                gui.draw_stat("Target Watts:", event.target_watts, 1, 1, reading_color)
 
         elif session.phase == Phase.STEADY:
-            alpha = 1
-            reading_color = (255, 255, 255)
-
             if self.samples > 1:
                 self.target_cadence //= self.samples
                 self.target_watts //= self.samples
@@ -137,13 +116,56 @@ class Intervals:
             event.target_cadence = self.target_cadence
             event.target_watts = self.target_watts
 
-            if cadence > self.target_cadence + 1 or event.watts > self.target_watts + 1:
+
+    def draw(self, gui, session, remaining_time):
+        gui.clear((96, 64, 128))
+
+        if session.phase == Phase.CALIBRATION:
+            alpha = 1
+            reading_color = (255, 255, 255)
+            hold = False
+
+            if self.current_rolling_bpm < self.target_bpm_low:
+                alpha = math.sin(session.now() * 5) * .5 + .5
+                reading_color = (255, 255 * alpha, 255 * alpha)
+                gui.clear((0, 128, 0))
+                gui.draw_text("increase speed", 100, 1200, (alpha, alpha, alpha), font="bigger")
+
+
+            elif self.current_rolling_bpm > self.target_bpm_high:
                 alpha = math.sin(session.now() * 5) * .5 + .5
                 reading_color = (255 * alpha, 255 * alpha, 255)
                 gui.clear((128, 0, 0))
                 gui.draw_text("decrease speed", 100, 1200, (alpha, alpha, alpha), font="bigger")
 
-            elif cadence < self.target_cadence - 1 or event.watts < self.target_watts - 1:
+            else:
+                hold = True
+                gui.clear((96, 64, 128))
+                gui.draw_text("perfect.  hold.", 100, 1200, font="bigger")
+
+            gui.draw_text(f"Remaining Calibration Time {remaining_time}", 0, 0)
+
+            gui.draw_stat("Current Cadence:", self.current_cadence, 0, 0)
+            if self.samples > 0 and hold:
+                target_cadence = int(self.target_cadence / self.samples)
+                gui.draw_stat("Target Cadence:", target_cadence, 1, 0, reading_color)
+
+            gui.draw_stat("Current Watts:", self.current_watts, 0, 1)
+            if self.samples > 0 and hold:
+                target_watts = int(self.target_watts / self.samples)
+                gui.draw_stat("Target Watts:", target_watts, 1, 1, reading_color)
+
+        elif session.phase == Phase.STEADY:
+            alpha = 1
+            reading_color = (255, 255, 255)
+
+            if self.current_cadence > self.target_cadence + 1 or self.current_watts > self.target_watts + 1:
+                alpha = math.sin(session.now() * 5) * .5 + .5
+                reading_color = (255 * alpha, 255 * alpha, 255)
+                gui.clear((128, 0, 0))
+                gui.draw_text("decrease speed", 100, 1200, (alpha, alpha, alpha), font="bigger")
+
+            elif self.current_cadence < self.target_cadence - 1 or self.current_watts < self.target_watts - 1:
                 alpha = math.sin(session.now() * 5) * .5 + .5
                 reading_color = (255, 255 * alpha, 255 * alpha)
                 gui.clear((0, 128, 0))
@@ -155,17 +177,14 @@ class Intervals:
 
             gui.draw_text(f"Remaining Time {remaining_time}", 0, 0)
 
-            gui.draw_stat("Current Cadence:", cadence, 0, 0)
-            if self.samples > 0:
-                gui.draw_stat("Target Cadence:", self.target_cadence, 1, 0, reading_color)
+            gui.draw_stat("Current Cadence:", self.current_cadence, 0, 0)
+            gui.draw_stat("Target Cadence:", self.target_cadence, 1, 0, reading_color)
 
-            gui.draw_stat("Current Watts:", event.watts, 0, 1)
-            if self.samples > 0:
-                gui.draw_stat("Target Watts:", self.target_watts, 1, 1, reading_color)
+            gui.draw_stat("Current Watts:", self.current_watts, 0, 1)
+            gui.draw_stat("Target Watts:", self.target_watts, 1, 1, reading_color)
 
         elif session.phase == Phase.COOLDOWN:
             gui.clear((96, 96, 128))
-
             gui.draw_text(f"Cool Down {remaining_time}", 0, 0)
 
         if self.bpm_debug:
@@ -229,7 +248,7 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
     def remaining_time_str(stop_time):
         return pretty_time(max(int(stop_time - session.now()), 0))
 
-    intervals = Intervals(session, bpm_debug)
+    intervals = IntervalRunner(session, bpm_debug)
 
     for interval in range(session.config.intervals):
 
@@ -241,7 +260,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             event = session.advance()
             skip_requested = True
             if session.live or session.phase == event.phase:
-                intervals(gui, session, event, remaining_time_str(calibration_stop_time))
+                intervals.update(session, event)
+                intervals.draw(gui, session, remaining_time_str(calibration_stop_time))
                 skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > calibration_stop_time):
                 session.set_phase(Phase.STEADY)
@@ -252,7 +272,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             event = session.advance()
             skip_requested = True
             if session.live or session.phase == event.phase:
-                intervals(gui, session, event, remaining_time_str(steady_stop_time))
+                intervals.update(session, event)
+                intervals.draw(gui, session, remaining_time_str(steady_stop_time))
                 skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > steady_stop_time):
                 session.set_phase(Phase.COOLDOWN)
@@ -265,7 +286,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             if event is None:
                 break
             elif session.live or session.phase == event.phase:
-                intervals(gui, session, event, remaining_time_str(cooldown_stop_time))
+                intervals.update(session, event)
+                intervals.draw(gui, session, remaining_time_str(cooldown_stop_time))
                 skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > cooldown_stop_time):
                 # the beginning of the interval loop will seek, as will the code following
