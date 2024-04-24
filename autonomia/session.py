@@ -162,6 +162,7 @@ class Session:
                 "cooldown_time" : self.config.cooldown_time,
                 "target_low" : self.config.target_bpm_low,
                 "target_high" : self.config.target_bpm_high,
+                "target_bias" : self.config.target_bpm_bias,
                 "log_headers" : log_headers,
                 "log" : logged_stats,
             }
@@ -248,6 +249,7 @@ class ReplaySession(Session):
         self.config.cooldown_time = self.replay["cooldown_time"]
         self.config.target_bpm_low = self.replay["target_low"]
         self.config.target_bpm_high = self.replay["target_high"]
+        self.config.target_bpm_bias = self.replay.get("target_bias", .5)
 
         self.replay_log = []
 

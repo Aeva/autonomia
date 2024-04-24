@@ -45,6 +45,7 @@ class IntervalRunner:
 
         self.target_bpm_low = session.resting_bpm + session.config.target_bpm_low
         self.target_bpm_high = session.resting_bpm + session.config.target_bpm_high
+        self.target_bmp_pivot = lerp(self.target_bpm_low, self.target_bpm_high, session.config.target_bpm_bias)
 
         self.target_cadence = 0
         self.target_watts = 0
@@ -98,9 +99,10 @@ class IntervalRunner:
                 self.samples = 1
 
             else:
-                self.target_cadence += self.current_cadence
-                self.target_watts += event.watts
-                self.samples += 1
+                weight = max(self.samples + 1, 1)
+                self.target_cadence += self.current_cadence * weight
+                self.target_watts += event.watts * weight
+                self.samples += weight
                 hold = True
 
             if self.samples > 0 and hold:
@@ -119,7 +121,7 @@ class IntervalRunner:
             event.target_watts = self.target_watts
 
 
-    def draw(self, gui, session, remaining_time):
+    def draw(self, gui, session, current_bpm, remaining_time):
         gui.clear((96, 64, 128))
 
         if session.phase == Phase.CALIBRATION:
@@ -147,15 +149,25 @@ class IntervalRunner:
 
             gui.draw_text(f"Remaining Calibration Time {remaining_time}", 0, 0)
 
+            nudge = 0
+            if self.current_rolling_bpm <= self.target_bmp_pivot - 1:
+                nudge = 1
+            elif self.current_rolling_bpm > self.target_bmp_pivot + 1:
+                nudge = -1
+
             gui.draw_stat("Current Cadence:", self.current_cadence, 0, 0)
             if self.samples > 0 and hold:
-                target_cadence = int(self.target_cadence / self.samples)
+                target_cadence = int(self.target_cadence / self.samples) + nudge
                 gui.draw_stat("Target Cadence:", target_cadence, 1, 0, reading_color)
 
             gui.draw_stat("Current Watts:", self.current_watts, 0, 1)
             if self.samples > 0 and hold:
-                target_watts = int(self.target_watts / self.samples)
+                target_watts = int(self.target_watts / self.samples) + nudge
                 gui.draw_stat("Target Watts:", target_watts, 1, 1, reading_color)
+
+            if self.bpm_debug and nudge != 0:
+                gui.draw_text(f"nudge: {nudge}", gui.w * .75, gui.h * .6,
+                              "white", font="regular", x_align = 0, y_align = 0)
 
         elif session.phase == Phase.STEADY:
             alpha = 1
@@ -193,16 +205,35 @@ class IntervalRunner:
             gui.draw_text(f"Cool Down {remaining_time}", 0, 0)
 
         if self.bpm_debug:
-            debug_color = (64, 64, 64)
-            gui.draw_stat("Rolling BPM:", event.bpm, 2, 0, debug_color, debug_color)
-            gui.draw_stat("Resting BPM:", session.resting_bpm, 2, 1, debug_color, debug_color)
+            debug_color = (0, 0, 0, 255 * .5)
 
-            debug_outline = [
-                (1500, 50),
-                (1500, 1100),
-                ]
+            high_y = 150
+            low_y = gui.h - 400
+            target_y = lerp(low_y, high_y, session.config.target_bpm_bias)
 
-            pygame.draw.lines(gui.screen, debug_color, False, debug_outline, 8)
+            high_line = [(1500, high_y), (gui.w, high_y)]
+            low_line = [(1500, low_y), (gui.w, low_y)]
+            target_line = [(1500, target_y), (gui.w, target_y)]
+
+            bpm_a = (current_bpm - self.target_bpm_low) / abs(self.target_bpm_high - self.target_bpm_low)
+            bpm_a = max(min(bpm_a, 1.05), -.05)
+            bpm_y = lerp(low_y, high_y, bpm_a)
+            bpm_line = [(1500, bpm_y), (gui.w, bpm_y)]
+
+            pygame.draw.lines(gui.screen, debug_color, False, high_line, 2)
+            pygame.draw.lines(gui.screen, debug_color, False, low_line, 2)
+            pygame.draw.lines(gui.screen, debug_color, False, target_line, 2)
+            pygame.draw.lines(gui.screen, "white", False, bpm_line, 2)
+
+            gui.draw_text(int(self.target_bpm_high), 1500, high_y,
+                            color=debug_color, font="smol", x_align=1, y_align=.5)
+            gui.draw_text(int(self.target_bpm_low), 1500, low_y,
+                            color=debug_color, font="smol", x_align=1, y_align=.5)
+            gui.draw_text(int(self.target_bmp_pivot), 1500, target_y,
+                            color=debug_color, font="smol", x_align=1, y_align=.5)
+
+            gui.draw_text(int(current_bpm), 1500, bpm_y,
+                            color="white", font="smol", x_align=1, y_align=.5)
 
 
 def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
@@ -267,6 +298,7 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             session.sleep(.25)
         return False
 
+    current_bpm = 0
     for interval in range(session.config.intervals):
 
         calibration_stop_time = session.now() + session.config.calibration_time * 60
@@ -278,8 +310,9 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
+                current_bpm = event.bpm_rolling_average
                 for i in range(15):
-                    intervals.draw(gui, session, remaining_time_str(calibration_stop_time))
+                    intervals.draw(gui, session, current_bpm, remaining_time_str(calibration_stop_time))
                     gui.present()
                     if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
@@ -298,8 +331,9 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
+                current_bpm = event.bpm_rolling_average
                 for i in range(60):
-                    intervals.draw(gui, session, remaining_time_str(steady_stop_time))
+                    intervals.draw(gui, session, current_bpm, remaining_time_str(steady_stop_time))
                     gui.present()
                     if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
@@ -320,7 +354,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
                 break
             elif session.live or session.phase == event.phase:
                 intervals.update(session, event)
-                intervals.draw(gui, session, remaining_time_str(cooldown_stop_time))
+                current_bpm = event.bpm_rolling_average
+                intervals.draw(gui, session, current_bpm, remaining_time_str(cooldown_stop_time))
                 skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > cooldown_stop_time):
                 # the beginning of the interval loop will seek, as will the code following
