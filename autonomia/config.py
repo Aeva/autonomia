@@ -13,13 +13,13 @@ class Config:
 
         # An interval consists of an active BPM calibration phase, followed by steady state phase,
         # followed by a cooldown phase.
-        self.intervals = 1
+        self.intervals = 2
 
         # Number of minutes to find the intensity setpoint at the start of an interval.
         self.calibration_time = 2
 
         # Number of minutes to exercise at the calibrated setpoint.
-        self.steady_time = 10
+        self.steady_time = 8
 
         # Number of minutes to spend cooling down after an interval.
         self.cooldown_time = 1
