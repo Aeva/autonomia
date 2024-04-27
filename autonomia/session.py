@@ -69,6 +69,9 @@ class Session:
     def sleep(self, seconds):
         time.sleep(seconds)
 
+    def workout_started(self):
+        return False
+
     def set_resting_bpm(self, resting_bpm):
         self.resting_bpm = resting_bpm
 
@@ -186,8 +189,12 @@ class RowingSession(Session):
         for available_erg in pyrow.find():
             self.erg = pyrow.pyrow(available_erg)
             print("erg found!")
+            self.erg.send(['CSAFE_RESET_CMD'])
             return True
         return False
+
+    def workout_started(self):
+        return self.erg.get_workout()['state'] != 0
 
     def advance(self):
         assert(self.erg is not None)

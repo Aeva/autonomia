@@ -279,7 +279,7 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
         for i in range(60):
             begin_phase(gui, session, event)
             gui.present()
-            if gui.pump_events().count(pygame.K_SPACE) > 0:
+            if gui.pump_events().count(pygame.K_SPACE) > 0 or session.workout_started():
                 session.set_phase(Phase.CALIBRATION)
                 break
             session.sleep(1/60)
