@@ -3,6 +3,7 @@
 import time
 import math
 import sys
+import os
 from importlib import resources
 import pygame
 import media
@@ -11,8 +12,12 @@ from misc import lerp
 
 class Display:
     def __init__(self):
+        # Correct support of HiDPI on Linux requires setting both of these environment variables as well
+        # as passing the desired unscaled resolution to `pygame.display.set_mode` via the `size` parameter.
+        os.environ["SDL_VIDEODRIVER"] = "wayland,x11"
+        os.environ["SDL_VIDEO_SCALE_METHOD"] = "letterbox"
+
         pygame.init()
-        pygame.font.init()
 
         font_name = None
 
@@ -93,7 +98,11 @@ class Display:
                 int(target_margin[0] - font_margin[0]),
                 -int(target_margin[1] - font_margin[1]))
 
-        self.screen = pygame.display.set_mode(flags = pygame.FULLSCREEN | pygame.NOFRAME, vsync=True)
+        self.screen = pygame.display.set_mode(
+            size = pygame.display.list_modes()[0],
+            flags = pygame.FULLSCREEN,
+            vsync = True)
+
         pygame.display.set_caption("autonomia")
 
         self.w = self.screen.get_width()
@@ -101,6 +110,8 @@ class Display:
         self.w_over_100 = self.w / 100
 
         pygame.mouse.set_visible(False)
+
+        print(f"using video driver: {pygame.display.get_driver()}")
 
     def pump_events(self):
         keys = []
