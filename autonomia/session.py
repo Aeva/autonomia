@@ -123,10 +123,12 @@ class Session:
     def advance(self):
         return 0
 
-    def save_to_disk(self):
+    def save_to_disk(self, abort=False):
         prefix = ""
         if not self.live:
             prefix = "REPLAY_"
+        if abort:
+            prefix = "HALTED_"
         out_path_template = f"{prefix}{self.date}_rowing_log{{}}.json"
         out_path = out_path_template.format("")
 

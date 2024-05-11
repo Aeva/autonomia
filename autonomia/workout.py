@@ -243,6 +243,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
         session = ReplaySession(replay_path, replay_speed)
     else:
         session = RowingSession()
+        if not no_save:
+            gui.session = session
 
     keys = []
 
@@ -368,9 +370,15 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
     while session.phase == Phase.FULLSTOP:
         event = session.advance()
         stop_phase(gui, session, event or Event())
-        if present(pygame.K_SPACE):
-            session.set_phase(Phase.CALIBRATION)
-            break
+
+        gui.present()
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                session.set_phase(Phase.CALIBRATION)
+                break
+        #if present(pygame.K_SPACE):
+        #    session.set_phase(Phase.CALIBRATION)
+        #    break
 
     session.set_phase(Phase.RESULTS)
     if not no_save:

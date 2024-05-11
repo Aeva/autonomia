@@ -19,6 +19,8 @@ class Display:
 
         pygame.init()
 
+        self.session = None
+
         font_name = None
 
         self.default_fonts = {
@@ -113,14 +115,19 @@ class Display:
 
         print(f"using video driver: {pygame.display.get_driver()}")
 
+    def request_shutdown(self):
+        if self.session:
+            self.session.save_to_disk(abort = True)
+        sys.exit(0)
+
     def pump_events(self):
         keys = []
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                sys.exit(0)
+                self.request_shutdown()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    sys.exit(0)
+                    self.request_shutdown()
                 else:
                     keys.append(event.key)
         return keys
