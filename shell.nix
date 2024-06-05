@@ -14,7 +14,9 @@ pkgs.mkShellNoCC {
   ];
 
   shellHook = ''
-    source venv/bin/activate
+    #source venv/bin/activate
     #pip install pycycling
+    #pip install pygame
+    #pip install pyusb
   '';
 }
