@@ -5,9 +5,16 @@ in
 
 pkgs.mkShellNoCC {
   packages = with pkgs; [
-    (python3.withPackages (subpkgs: with subpkgs; [
+    (python311.withPackages (subpkgs: with subpkgs; [
         pyusb
         pygame
+        pip
+        virtualenv
     ]))
   ];
+
+  shellHook = ''
+    source venv/bin/activate
+    #pip install pycycling
+  '';
 }
