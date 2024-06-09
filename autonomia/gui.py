@@ -6,6 +6,9 @@ import sys
 import os
 from importlib import resources
 import pygame
+import pygame.font
+import pygame.sysfont
+import pygame.display
 import media
 from misc import lerp
 
@@ -18,17 +21,19 @@ class Display:
         os.environ["SDL_VIDEO_SCALE_METHOD"] = "letterbox"
 
         pygame.init()
+        pygame.font.init()
+        pygame.display.init()
 
         self.session = None
 
         font_name = None
 
         self.default_fonts = {
-            "tiny" : pygame.font.SysFont(font_name, 32),    # M-height is 16 px?
-            "smol" : pygame.font.SysFont(font_name, 64),    # M-height is 32 px?
-            "regular" : pygame.font.SysFont(font_name, 96), # M-height is 48 px?
-            "big" : pygame.font.SysFont(font_name, 200),    # M-height is 100 px?
-            "bigger" : pygame.font.SysFont(font_name, 400), # M-height is 200 px?
+            "tiny" : pygame.sysfont.SysFont(font_name, 32),    # M-height is 16 px?
+            "smol" : pygame.sysfont.SysFont(font_name, 64),    # M-height is 32 px?
+            "regular" : pygame.sysfont.SysFont(font_name, 96), # M-height is 48 px?
+            "big" : pygame.sysfont.SysFont(font_name, 200),    # M-height is 100 px?
+            "bigger" : pygame.sysfont.SysFont(font_name, 400), # M-height is 200 px?
         }
 
         def m_height(font):
@@ -56,8 +61,8 @@ class Display:
 
         def match_size(name):
             """
-            This function takes a named invocation of pygame.font.SysFont, and attempts to find
-            a size that will give a compatible M height.
+            This function takes a named invocation of pygame.sysfont.SysFont, and attempts to
+            find a size that will give a compatible M height.
 
             Acconding to the pygame docs, the size parameter in the font constructor is meant
             to be the desired pixel size.  This, however, appears to be a lie.  As the actual

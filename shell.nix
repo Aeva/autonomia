@@ -8,15 +8,7 @@ pkgs.mkShellNoCC {
     (python311.withPackages (subpkgs: with subpkgs; [
         pyusb
         pygame
-        pip
-        virtualenv
+        bleak
     ]))
   ];
-
-  shellHook = ''
-    #source venv/bin/activate
-    #pip install pycycling
-    #pip install pygame
-    #pip install pyusb
-  '';
 }

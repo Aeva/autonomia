@@ -11,6 +11,8 @@ import argparse
 import pathlib
 from gui import Display
 from workout import workout_main, viewer_main
+from battery import battery_main
+from heart import bpm_debug_main
 
 
 if __name__ == "__main__":
@@ -50,7 +52,44 @@ if __name__ == "__main__":
         action="store_true",
         help="plot bpm on a global scale")
 
+    parser.add_argument(
+        "--bluetooth",
+        action="store",
+        type=str,
+        help="bluetooth hrm address")
+
+    parser.add_argument(
+        "--battery",
+        action="store_true",
+        help="print the bluetooth device battery level")
+
+    parser.add_argument(
+        "--bluetooth_bpm_debug",
+        action="store_true",
+        help="print the bluetooth device bpm stream")
+
     args = parser.parse_args()
+
+    device_addr = None
+    if args.bluetooth:
+        device_addr = args.bluetooth
+    else:
+        device_addr = os.environ.get("BLE_HRM_ADDRESS")
+
+    ###
+    if device_addr:
+        print(f"heart monitor address: {device_addr}")
+    ###
+
+    if args.battery:
+        battery_main(device_addr)
+        sys.exit(0)
+
+    if args.bluetooth_bpm_debug:
+        os.environ["PYTHONASYNCIODEBUG"] = '1'
+        os.environ["BLEAK_LOGGING"] = '1'
+        bpm_debug_main(device_addr)
+        sys.exit(0)
 
     if args.viewer:
         gui = Display()

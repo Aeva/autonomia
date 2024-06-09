@@ -33,6 +33,7 @@ class Event:
 
         self.bpm = 0
         self.bpm_rolling_average = 0
+        self.rr_interval = 0
 
         self.cadence = 0
         self.target_cadence = 0
@@ -174,7 +175,6 @@ class Session:
             out_file.write(json.dumps(log_blob))
 
         print("Workout complete!")
-
 
 
 class RowingSession(Session):
