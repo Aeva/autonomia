@@ -9,7 +9,6 @@ pkgs.mkShell {
         pyusb
         pygame
         bleak
-        uvloop
     ]))
   ];
 }

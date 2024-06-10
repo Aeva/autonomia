@@ -1,6 +1,5 @@
 
 import asyncio
-import uvloop
 from bleak import BleakClient
 from bleak.exc import BleakError
 
@@ -49,7 +48,7 @@ async def metronome(queue):
     # 116 taiko drum
     # 122 ocean
     # 123 weirdass bird siren
-    program = 116
+    program = 11
     m.write_short(0xC0, program, 0)
 
     meter = 4
@@ -127,6 +126,6 @@ async def metronome_setup(bluetooth_addr):
 
 def metronome_test_main(bluetooth_addr):
     if bluetooth_addr:
-        uvloop.run(metronome_setup(bluetooth_addr))
+        asyncio.run(metronome_setup(bluetooth_addr))
     else:
         print("no bluetooth address specified")
