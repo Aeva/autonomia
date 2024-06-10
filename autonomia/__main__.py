@@ -16,6 +16,7 @@ from gui import Display
 from workout import workout_main, viewer_main
 from battery import battery_main
 from heart import bpm_debug_main
+from metronome_test import metronome_test_main
 
 
 def bluetooth_scan():
@@ -96,6 +97,10 @@ if __name__ == "__main__":
         action="store_true",
         help="print the bluetooth device bpm stream")
 
+    parser.add_argument(
+        "--metronome_test",
+        action="store_true")
+
     args = parser.parse_args()
 
     device_addr = None
@@ -121,6 +126,10 @@ if __name__ == "__main__":
         os.environ["PYTHONASYNCIODEBUG"] = '1'
         os.environ["BLEAK_LOGGING"] = '1'
         bpm_debug_main(device_addr)
+        sys.exit(0)
+
+    if args.metronome_test:
+        metronome_test_main(device_addr)
         sys.exit(0)
 
     if args.viewer:

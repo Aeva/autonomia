@@ -12,9 +12,8 @@ RR_INTERVAL_BIT             = 0b_0001_0000
 
 reconnect = True
 
-def heart_event(sender, packet):
-    global reconnect
 
+def decode(packet):
     flags = packet[0]
 
     bpm_offset = 1
@@ -30,15 +29,20 @@ def heart_event(sender, packet):
     bpm = int.from_bytes(packet[bpm_offset:bpm_offset + bpm_bytes], 'little')
     rr_intervals = None
 
+
     if (flags & RR_INTERVAL_BIT) == RR_INTERVAL_BIT:
         rr_intervals = [
             int.from_bytes(
                 packet[rr_offset + rr_bytes * i:rr_offset + rr_bytes * (i+1)],
                 'little')
             for i in range(rr_count)]
-    else:
-        print("Error?")
-        reconnect = True
+
+    return bpm, rr_intervals
+
+
+def heart_event(sender, packet):
+    global reconnect
+    bpm, rr_intervals = decode(packet)
 
     minute = 60 * 1000
 
@@ -49,6 +53,8 @@ def heart_event(sender, packet):
 
     else:
         print(f"bpm = {bpm}")
+        reconnect = True
+
 
 async def bpm_logger(device_address):
     global reconnect
