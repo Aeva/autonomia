@@ -16,6 +16,11 @@ from quiesce import FullStop
 from misc import zero_pad, lerp, pretty_time
 
 
+metronome_tempo = 15
+metronome_volume = 0
+metronome_next_t = 0
+
+
 class ErgSearch:
     def __init__(self):
         pass
@@ -49,7 +54,7 @@ class IntervalRunner:
         self.target_bpm_high = session.resting_bpm + session.config.target_bpm_high
         self.target_bmp_pivot = lerp(self.target_bpm_low, self.target_bpm_high, session.config.target_bpm_bias)
 
-        self.target_cadence = 0
+        self.target_cadence = 15
         self.target_watts = 0
         self.samples = 0
         self.last_valid_cadence = None
@@ -81,6 +86,8 @@ class IntervalRunner:
             return 0
 
     def update(self, session, event):
+        global metronome_tempo
+        global metronome_volume
         self.current_cadence = self.filter_cadence(event.cadence)
         self.current_watts = event.watts
         self.current_rolling_bpm = event.bpm_rolling_average
@@ -122,6 +129,12 @@ class IntervalRunner:
             event.target_cadence = self.target_cadence
             event.target_watts = self.target_watts
 
+            if self.target_cadence > 0 and self.target_cadence < 30:
+                metronome_tempo = self.target_cadence
+                metronome_volume = 1
+            else:
+                print(f"Invalid tempo: {self.target_cadence}")
+                metronome_volume = 1
 
     def draw(self, gui, session, current_bpm, remaining_time):
         gui.clear((96, 64, 128))
@@ -238,7 +251,61 @@ class IntervalRunner:
                             color="white", font="smol", x_align=1, y_align=.5)
 
 
-async def workout_task(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
+async def metronome_task(midi_id):
+    global metronome_next_t
+    m = pygame.midi.Output(midi_id, latency=1000, buffer_size=1024)
+
+    async def send(status, data1, data2, rest=1):
+        global metronome_next_t
+        m.write([[[status, data1, data2], metronome_next_t]])
+        await asyncio.sleep(rest / 1000)
+
+    async def play(note, velocity, rest=1):
+        global metronome_next_t
+        m.write([[[0x90, note, max(velocity, 1)], metronome_next_t]])
+        metronome_next_t += rest
+        m.write([[[0x80, note, 0], metronome_next_t - 1]])
+        await asyncio.sleep(rest / 1000)
+
+    # I think the program numbers all are general midi, but indexing from 0 instead of 1
+    # so subtract 1 from everything on https://en.wikipedia.org/wiki/General_MIDI#Program_change_events
+
+    # 4 sounds ok (some kind of rhodes piano)
+    # 10 sounds great (music box?)
+    # 11 and 12 are alright (vibraphone and marimba)
+    # 21 kinda nice but needs to send note offs (accordion)
+    # 75 acceptable pan flute
+    # 79 alright ocarina
+    # 92 sounds decent at higher octaves (glass armonica pad)
+    # 116 taiko drum
+    # 122 ocean
+    # 123 weirdass bird siren
+    program = 11
+    await send(0xC0, program, 0)
+
+    meter = 4
+
+    metronome_next_t = pygame.midi.time()
+
+    i = 0
+    while True:
+        interval = int(1000 * (60 / metronome_tempo))
+        beat = interval // meter
+
+        if i == 0:
+            vol = 127 * metronome_volume
+            await play(69, vol, beat)
+
+        else:
+            vol = 80 * metronome_volume
+            await play(60, vol, beat)
+
+        i = (i + 1) % meter
+
+
+async def workout_task(gui, midi_id, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
+    global metronome_volume
+
     session = None
     if replay_path:
         assert(os.path.isfile(replay_path))
@@ -275,6 +342,9 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
         if await present(pygame.K_SPACE):
             session.set_phase(Phase.PENDING)
             break
+
+    metronome_volume = 0
+    metronome = asyncio.create_task(metronome_task(midi_id))
 
     begin_phase = PleaseBegin()
 
@@ -350,6 +420,7 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
                 session.set_phase(Phase.COOLDOWN)
 
         cooldown_stop_time = session.now() + session.config.cooldown_time * 60
+        metronome_volume = 0
 
         while session.phase == Phase.COOLDOWN:
             event = session.advance()
@@ -386,12 +457,30 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
     if not no_save:
         session.save_to_disk()
 
+    metronome.cancel()
+
     # automatically open up the workout viewer
     viewer_main(gui)
 
 
 def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
-    asyncio.run(workout_task(gui, replay_path, replay_speed, no_save, bpm_debug))
+    pygame.midi.init()
+    midi_id = 0
+    midi_info = pygame.midi.get_device_info(midi_id)
+    while midi_info != None:
+        _, name, _, is_output, is_opened = midi_info
+        if name.startswith(b"TiMidity") and is_output == 1 and is_opened == 0:
+            break
+        else:
+            midi_id += 1
+            midi_info = pygame.midi.get_device_info(midi_id)
+
+    if not midi_info:
+        midi_id = 0
+        print("Can't find timidity.  Run `timidity -iA -Os` and try again.")
+        return
+
+    asyncio.run(workout_task(gui, midi_id, replay_path, replay_speed, no_save, bpm_debug))
 
 
 def find_bpm_min_max(sessions, margin=5):
