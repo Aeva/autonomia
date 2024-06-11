@@ -1,5 +1,6 @@
 
 
+import asyncio
 import datetime
 import time
 import json
@@ -67,8 +68,8 @@ class Session:
     def now(self):
         return time.time()
 
-    def sleep(self, seconds):
-        time.sleep(seconds)
+    async def sleep(self, seconds):
+        asyncio.sleep(seconds)
 
     def workout_started(self):
         return False
@@ -295,9 +296,9 @@ class ReplaySession(Session):
     def now(self):
         return time.time()
 
-    def sleep(self, seconds):
+    async def sleep(self, seconds):
         if self.speed > 0:
-            time.sleep(seconds * self.speed)
+            await asyncio.sleep(seconds * self.speed)
 
     def update_speed(self):
         if self.speed_override is None:
