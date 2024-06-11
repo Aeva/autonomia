@@ -1,13 +1,11 @@
 
 
-import asyncio
 import os
 import sys
 import math
 import glob
 import datetime
 import pygame
-import pygame.midi
 from gui import Display
 from session import RowingSession, ReplaySession, Phase, Event
 from log_viewer import ResultsGraph
@@ -238,7 +236,7 @@ class IntervalRunner:
                             color="white", font="smol", x_align=1, y_align=.5)
 
 
-async def workout_task(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
+def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
     session = None
     if replay_path:
         assert(os.path.isfile(replay_path))
@@ -252,19 +250,19 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
 
     session.set_phase(Phase.RESTING_BPM)
 
-    async def present(skip_key):
+    def present(skip_key):
         gui.present()
         for i in range(4):
             keys = gui.pump_events()
             if keys.count(skip_key) > 0:
                 return True
-            await session.sleep(.25)
+            session.sleep(.25)
         return False
 
     lobby = ErgSearch()
     while not session.connect():
         lobby(gui)
-        if await present(None):
+        if present(None):
             sys.exit(0)
 
     resting_phase = RestingBPM(session)
@@ -272,7 +270,7 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
     while session.phase == Phase.RESTING_BPM:
         event = session.advance()
         resting_phase(gui, session, event)
-        if await present(pygame.K_SPACE):
+        if present(pygame.K_SPACE):
             session.set_phase(Phase.PENDING)
             break
 
@@ -286,20 +284,20 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
             if gui.pump_events().count(pygame.K_SPACE) > 0 or session.workout_started():
                 session.set_phase(Phase.CALIBRATION)
                 break
-            await session.sleep(1/60)
+            session.sleep(1/60)
 
     def remaining_time_str(stop_time):
         return pretty_time(max(int(stop_time - session.now()), 0))
 
     intervals = IntervalRunner(session, bpm_debug)
 
-    async def interval_present(skip_key):
+    def interval_present(skip_key):
         gui.present()
         for i in range(4):
             keys = gui.pump_events()
             if keys.count(skip_key) > 0:
                 return True
-            await session.sleep(.25)
+            session.sleep(.25)
         return False
 
     current_bpm = 0
@@ -321,7 +319,7 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
                     if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
                         break
-                    await session.sleep(1/15)
+                    session.sleep(1/15)
             else:
                 skip_requested = True
 
@@ -342,7 +340,7 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
                     if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
                         break
-                    await session.sleep(1/60)
+                    session.sleep(1/60)
             else:
                 skip_requested = True
 
@@ -360,7 +358,7 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
                 intervals.update(session, event)
                 current_bpm = event.bpm_rolling_average
                 intervals.draw(gui, session, current_bpm, remaining_time_str(cooldown_stop_time))
-                skip_requested = await present(pygame.K_BACKSPACE)
+                skip_requested = present(pygame.K_BACKSPACE)
             if skip_requested or (session.live and session.now() > cooldown_stop_time):
                 # the beginning of the interval loop will seek, as will the code following
                 # said loop.
@@ -388,10 +386,6 @@ async def workout_task(gui, replay_path = None, replay_speed = None, no_save = F
 
     # automatically open up the workout viewer
     viewer_main(gui)
-
-
-def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
-    asyncio.run(workout_task(gui, replay_path, replay_speed, no_save, bpm_debug))
 
 
 def find_bpm_min_max(sessions, margin=5):
