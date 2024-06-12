@@ -25,7 +25,6 @@ def metronome_proc(queue):
 
     cadence = 0
     volume = 0
-    current_t = 0
 
     pygame.midi.init()
     midi_id = 0
