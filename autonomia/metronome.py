@@ -3,7 +3,6 @@ import multiprocessing
 import time
 import os
 
-
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import warnings
 warnings.simplefilter("ignore")
@@ -11,11 +10,19 @@ import pygame.midi
 warnings.resetwarnings()
 
 
+# measures per minute, not beats per minute!
+meter = 4
+
+
 _proc = None
 _queue = None
 
 
-def inner(queue):
+def metronome_proc(queue):
+    """
+    Entry point for the metronome subprocess.
+    """
+
     cadence = 0
     volume = 0
     current_t = 0
@@ -44,7 +51,6 @@ def inner(queue):
     velocity = 0
 
     try:
-        meter = 4
         beat = 0
         half_beat = 0
 
@@ -62,18 +68,17 @@ def inner(queue):
                 packet = None
 
             if packet:
-                command, new_cadence, new_volume = packet
-                if command == "halt":
-                    m.close()
-                    return
-                elif command == "reset" or command == "tweak":
+                command = packet[0]
+                if command == "reset" or command == "tweak":
+                    _, new_cadence, new_volume = packet
+
                     if command == "reset":
                         i = 0
                         next_beat = time.time_ns()
                         next_rest = None
 
                     cadence, volume = new_cadence, new_volume
-                    interval = int(1000_000_000 * (60 / cadence))
+                    interval = 60_000_000_000 // cadence
                     beat = interval // meter
                     half_beat = beat // 2
 
@@ -82,6 +87,15 @@ def inner(queue):
                         next_beat = new_next
                         if next_rest:
                             next_rest = next_beat - half_beat
+
+                elif command == "prog":
+                    _, new_program, _ = packet
+                    program = min(max(new_program, 0), 255)
+                    m.write_short(0xC0, program, 0)
+
+                elif command == "halt":
+                    m.close()
+                    return
 
             now = time.time_ns()
 
@@ -108,16 +122,23 @@ def inner(queue):
         m.close()
 
 def start():
+    """
+    Start the metronome subprocess if one is not running.
+    """
     global _proc
     global _queue
 
-    multiprocessing.set_start_method('spawn')
-    _queue = multiprocessing.Queue()
-    _proc = multiprocessing.Process(target=inner, args=(_queue,))
-    _proc.start()
+    if not (_proc and _queue):
+        multiprocessing.set_start_method('spawn')
+        _queue = multiprocessing.Queue()
+        _proc = multiprocessing.Process(target=metronome_proc, args=(_queue,))
+        _proc.start()
 
 
 def stop():
+    """
+    Halt the metronome subprocess if one is running.
+    """
     global _proc
     global _queue
     if _proc and _queue:
@@ -129,6 +150,11 @@ def stop():
 
 
 def reset(cadence, volume):
+    """
+    Set the current tempo and volume.  This resets the measure counter making
+    the next beat the on-beat.  The `cadence` parameter is the number of
+    measures per minute, not beats per minute.
+    """
     if _queue:
         try:
             _queue.put(("reset", cadence, volume), False)
@@ -137,8 +163,40 @@ def reset(cadence, volume):
 
 
 def tweak(cadence, volume):
+    """
+    Set the current tempo and volume.  This will not reset the measure counter.
+    The `cadence` parameter is the number of measures per minute, not beats per
+    minute.
+    """
     if _queue:
         try:
             _queue.put(("tweak", cadence, volume), False)
+        except:
+            pass
+
+
+def prog(program):
+    """
+    The program numbers for timidity all are general midi, but they index
+    from 0 instead of 1, whereas general midi tables are often written indexing
+    from 1 like https://en.wikipedia.org/wiki/General_MIDI#Program_change_events
+
+    Here's some values that sound nice or at least interesting:
+     - 4 sounds ok (some kind of rhodes piano)
+     - 10 sounds great (music box?)
+     - 11 and 12 are alright (vibraphone and marimba)
+     - 21 kinda nice but needs to send note offs (accordion)
+     - 75 acceptable pan flute
+     - 79 alright ocarina
+     - 92 sounds decent at higher octaves (glass armonica pad)
+     - 108 kalimba
+     - 115 wood block
+     - 116 taiko drum
+     - 122 ocean
+     - 123 weirdass bird siren
+    """
+    if _queue:
+        try:
+            _queue.put(("prog", program, 0), False)
         except:
             pass

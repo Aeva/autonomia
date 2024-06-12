@@ -100,7 +100,14 @@ if __name__ == "__main__":
         help="print the bluetooth device bpm stream")
 
     parser.add_argument(
-        "--metronome_test",
+        "--metronome",
+        action="store",
+        type=int,
+        default=None,
+        help="tempo")
+
+    parser.add_argument(
+        "--metronome_debug",
         action="store_true")
 
     parser.add_argument(
@@ -117,7 +124,19 @@ if __name__ == "__main__":
 
     volume = min(max(args.volume, 0.0), 1.0) if args.volume is not None else 1.0
 
-    if args.metronome_test:
+    if args.metronome:
+        metronome.start()
+        metronome.prog(115) #115)
+        metronome.reset(args.metronome / metronome.meter, volume)
+        try:
+            while True:
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            pass
+        metronome.stop()
+        sys.exit(0)
+
+    if args.metronome_debug:
         metronome.start()
         print("10 bpm")
         metronome.reset(10, volume)
