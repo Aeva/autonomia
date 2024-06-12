@@ -11,6 +11,7 @@ import pygame.sysfont
 import pygame.display
 import media
 from misc import lerp
+import metronome
 
 
 class Display:
@@ -123,6 +124,9 @@ class Display:
     def request_shutdown(self):
         if self.session:
             self.session.save_to_disk(abort = True)
+        pygame.display.quit()
+        pygame.quit()
+        metronome.stop()
         sys.exit(0)
 
     def pump_events(self):

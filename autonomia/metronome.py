@@ -89,10 +89,10 @@ def inner(queue):
                 if now >= next_beat:
                     if i == 0:
                         note = 69
-                        velocity = 127 * volume
+                        velocity = int(127 * volume)
                     else:
                         note = 60
-                        velocity = 90 * volume
+                        velocity = int(90 * volume)
 
                     m.write_short(0x90, note, velocity)
                     next_beat += beat
@@ -120,23 +120,25 @@ def start():
 def stop():
     global _proc
     global _queue
+    if _proc and _queue:
+        _queue.put(("halt", 0, 0), True)
+        _proc.join()
 
-    _queue.put(("halt", 0, 0))
-    _proc.join()
-
-    _queue = None
-    _proc = None
+        _queue = None
+        _proc = None
 
 
 def reset(cadence, volume):
-    try:
-        _queue.put(("reset", cadence, volume), False)
-    except:
-        pass
+    if _queue:
+        try:
+            _queue.put(("reset", cadence, volume), False)
+        except:
+            pass
 
 
 def tweak(cadence, volume):
-    try:
-        _queue.put(("tweak", cadence, volume), False)
-    except:
-        pass
+    if _queue:
+        try:
+            _queue.put(("tweak", cadence, volume), False)
+        except:
+            pass

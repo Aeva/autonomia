@@ -107,15 +107,23 @@ if __name__ == "__main__":
         "--rr_interval_metronome",
         action="store_true")
 
+    parser.add_argument(
+        "--volume",
+        action="store",
+        type=float,
+        help="metronome volume, must be between 0 and 1")
+
     args = parser.parse_args()
+
+    volume = min(max(args.volume, 0.0), 1.0) if args.volume is not None else 1.0
 
     if args.metronome_test:
         metronome.start()
         print("10 bpm")
-        metronome.reset(10, 1)
+        metronome.reset(10, volume)
         time.sleep(8)
         print("20 bpm")
-        metronome.tweak(20, 1)
+        metronome.tweak(20, volume)
         time.sleep(8)
         metronome.stop()
         sys.exit()
@@ -164,6 +172,7 @@ if __name__ == "__main__":
             gui = Display()
             workout_main(
                 gui,
+                volume,
                 replay_path = replay_path,
                 replay_speed = speed_divisor,
                 no_save = args.no_save,
@@ -174,5 +183,5 @@ if __name__ == "__main__":
 
     else:
         gui = Display()
-        workout_main(gui, no_save=args.no_save, bpm_debug=args.bpm_debug)
+        workout_main(gui, volume, no_save=args.no_save, bpm_debug=args.bpm_debug)
         sys.exit(0)
