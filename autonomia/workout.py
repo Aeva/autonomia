@@ -359,7 +359,7 @@ def workout_main(gui, volume, replay_path = None, replay_speed = None, no_save =
             if skip_requested or (session.live and session.now() > steady_stop_time):
                 session.set_phase(Phase.COOLDOWN)
 
-        metronome.tweak(10, .5 * volume)
+        metronome.tweak(10, 0)
         cooldown_stop_time = session.now() + session.config.cooldown_time * 60
 
         while session.phase == Phase.COOLDOWN:
