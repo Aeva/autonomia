@@ -12,6 +12,7 @@ from log_viewer import ResultsGraph
 from resting_bpm import RestingBPM
 from quiesce import FullStop
 from misc import zero_pad, lerp, pretty_time
+import metronome
 
 
 class ErgSearch:
@@ -237,6 +238,8 @@ class IntervalRunner:
 
 
 def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
+    metronome.start()
+
     session = None
     if replay_path:
         assert(os.path.isfile(replay_path))
@@ -303,6 +306,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
     current_bpm = 0
     for interval in range(session.config.intervals):
 
+        metronome.tweak(15, 0)
+
         calibration_stop_time = session.now() + session.config.calibration_time * 60
         if session.phase == Phase.COOLDOWN:
             session.set_phase(Phase.CALIBRATION)
@@ -326,6 +331,12 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             if skip_requested or (session.live and session.now() > calibration_stop_time):
                 session.set_phase(Phase.STEADY)
 
+        cadence = intervals.target_cadence
+        if intervals.samples > 0:
+            cadence //= intervals.samples
+
+        metronome.reset(cadence, 1)
+
         steady_stop_time = session.now() + session.config.steady_time * 60
 
         while session.phase == Phase.STEADY:
@@ -347,6 +358,7 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
             if skip_requested or (session.live and session.now() > steady_stop_time):
                 session.set_phase(Phase.COOLDOWN)
 
+        metronome.tweak(10, .5)
         cooldown_stop_time = session.now() + session.config.cooldown_time * 60
 
         while session.phase == Phase.COOLDOWN:
@@ -363,6 +375,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
                 # the beginning of the interval loop will seek, as will the code following
                 # said loop.
                 break
+
+    metronome.tweak(15, 0)
 
     session.set_phase(Phase.FULLSTOP)
     stop_phase = FullStop()
@@ -383,6 +397,8 @@ def workout_main(gui, replay_path = None, replay_speed = None, no_save = False, 
     session.set_phase(Phase.RESULTS)
     if not no_save:
         session.save_to_disk()
+
+    metronome.stop()
 
     # automatically open up the workout viewer
     viewer_main(gui)

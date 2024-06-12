@@ -10,6 +10,7 @@ import asyncio
 from bleak import BleakScanner
 
 import sys
+import time
 import argparse
 import pathlib
 from gui import Display
@@ -17,6 +18,7 @@ from workout import workout_main, viewer_main
 from battery import battery_main
 from heart import bpm_debug_main
 from metronome_test import metronome_test_main
+import metronome
 
 
 def bluetooth_scan():
@@ -101,7 +103,22 @@ if __name__ == "__main__":
         "--metronome_test",
         action="store_true")
 
+    parser.add_argument(
+        "--rr_interval_metronome",
+        action="store_true")
+
     args = parser.parse_args()
+
+    if args.metronome_test:
+        metronome.start()
+        print("10 bpm")
+        metronome.reset(10, 1)
+        time.sleep(8)
+        print("20 bpm")
+        metronome.tweak(20, 1)
+        time.sleep(8)
+        metronome.stop()
+        sys.exit()
 
     device_addr = None
     if args.bluetooth_scan:
@@ -128,7 +145,7 @@ if __name__ == "__main__":
         bpm_debug_main(device_addr)
         sys.exit(0)
 
-    if args.metronome_test:
+    if args.rr_interval_metronome:
         metronome_test_main(device_addr)
         sys.exit(0)
 
