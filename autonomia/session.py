@@ -362,6 +362,8 @@ class ReplaySession(Session):
         if len(self.replay["log"][0]) == 10:
             for row in self.replay["log"]:
                 phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm, rr_interval = row
+                if bpm < 1:
+                    continue
                 e = Event()
                 e.phase = Phase(phase)
                 e.time = t

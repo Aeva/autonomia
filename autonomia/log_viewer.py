@@ -37,16 +37,12 @@ class ResultsGraph:
 
         phase_start = session.log[0]
         for event in session.log:
-            if event.bpm < 1 or event.error:
-                continue
             phase_start = event
             break
 
         self.phases = [(0, phase_start.phase)]
 
         for event in session.log:
-            if event.bpm < 1 or event.error:
-                continue
             if event.phase != phase_start.phase:
                 self.phases.append((event.time - self.min_time, event.phase))
                 phase_start = event
@@ -73,15 +69,9 @@ class ResultsGraph:
                 self.bpm_lines.append((bpm, [(self.margin_x1, y_plot), (self.margin_x2, y_plot)]))
 
         self.dedupe = [copy.copy(session.log[0])]
-        for event in session.log:
-            if event.bpm >=1 and not event.error:
-                self.dedupe = [copy.copy(event)]
-                break
 
         last = self.dedupe[-1]
         for event in session.log[1:]:
-            if event.bpm < 1 or event.error:
-                continue
             if event.bpm != last.bpm:
                 self.dedupe[-1].time = (self.dedupe[-1].time + last.time) * .5
                 self.dedupe.append(copy.copy(event))
@@ -162,8 +152,6 @@ class ResultsGraph:
             self.octaves.append(octave)
 
         for event in session.log:
-            if event.bpm < 1 or event.error:
-                continue
             x_plot = self.margin_x1 + (event.time - self.min_time) * self.bpm_x_scale
             y_plot = self.margin_y2 - (event.bpm - self.bpm_min) * self.bpm_y_scale
             self.bpm_line.append((x_plot, y_plot))
