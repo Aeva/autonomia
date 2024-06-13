@@ -215,7 +215,7 @@ class ResultsGraph:
             if bpm == self.target_bpm_low or bpm == self.target_bpm_high:
                 label_color = "white"
             pygame.draw.lines(gui.screen, "gray", False, line, 1)
-            gui.draw_y_label(bpm, line[0][0] - 5, line[0][1], label_color)
+            gui.draw_y_label(int(bpm), line[0][0] - 5, line[0][1], label_color)
 
         pygame.draw.lines(
             gui.screen, "blue", False,
