@@ -11,14 +11,14 @@ class RestingBPM:
 
 
     def __call__(self, gui, session, event):
-        if event.bpm > 1 and not event.error:
+        if event and event.bpm > 1 and not event.error:
             self.calibration.append(event.bpm)
             if len(self.calibration) > 100:
                 self.calibration = self.calibration[-101:]
 
         gui.clear((64, 0, 128))
 
-        if len(self.calibration) > 1:
+        if event and len(self.calibration) > 1:
             resting_bpm_average = sum(self.calibration) // len(self.calibration)
 
             resting_bpm_deviation = 0

@@ -308,6 +308,7 @@ class ManualSession(Session):
                         event.bpm_rolling_average = event.bpm
 
                     self.log.append(event)
+
             elif message_type == "status" or message_type == "fatal":
                 self.connected = False
 
@@ -316,19 +317,12 @@ class ManualSession(Session):
                 event.phase = self.phase
                 event.time = self.now()
                 event.error = f"{message_type}: {str(data)}"
-                if len(self.log) > 0:
-                    event.bpm = self.log[-1].bpm
-                    event.bpm_rolling_average = self.log[-1].bpm_rolling_average
                 self.log.append(event)
 
-        if not event:
-            event = Event()
-            event.phase = self.phase
-            event.time = self.now()
-            event.error = "no data"
-            self.log.append(event)
-
-        return event
+        if event and event.bpm > 1 and not event.error:
+            return event
+        else:
+            return None
 
 
 class ReplaySession(Session):

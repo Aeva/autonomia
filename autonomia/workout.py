@@ -31,11 +31,12 @@ class PleaseBegin:
     def __call__(self, gui, session, event):
         gui.clear((96, 96, 128))
 
-        wiggle_bpm = (event.bpm - session.resting_bpm) >= 10
+        if event:
+            wiggle_bpm = (event.bpm - session.resting_bpm) >= 10
 
-        gui.draw_stat("Current BPM:", event.bpm, 0, 0, wiggle = wiggle_bpm)
-        gui.draw_stat("Resting BPM:", session.resting_bpm, 1, 0)
-        gui.draw_text("please begin", 700, None, font="big")
+            gui.draw_stat("Current BPM:", round(event.bpm), 0, 0, wiggle = wiggle_bpm)
+            gui.draw_stat("Resting BPM:", round(session.resting_bpm), 1, 0)
+            gui.draw_text("please begin", 700, None, font="big")
 
 
 class IntervalRunner:
@@ -80,6 +81,8 @@ class IntervalRunner:
             return 0
 
     def update(self, session, event):
+        if not event:
+            return
         self.current_cadence = self.filter_cadence(event.cadence)
         self.current_watts = event.watts
         self.current_rolling_bpm = event.bpm_rolling_average
@@ -327,6 +330,8 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
         while session.phase == Phase.CALIBRATION:
             event = session.advance()
+            if not event:
+                continue
             skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
@@ -396,7 +401,9 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
     while session.phase == Phase.FULLSTOP:
         event = session.advance()
-        stop_phase(gui, session, event or Event())
+        if not event:
+            continue
+        stop_phase(gui, session, event)
 
         gui.present()
         for event in pygame.event.get():
