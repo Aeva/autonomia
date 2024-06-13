@@ -423,6 +423,8 @@ def find_bpm_min_max(sessions, margin=5):
 
     for session in sessions:
         for event in session.log:
+            if event.bpm < 1 or event.error:
+                continue
             bpm_min = min(bpm_min, min(event.bpm, event.bpm_rolling_average))
             bpm_max = max(bpm_max, max(event.bpm, event.bpm_rolling_average))
 

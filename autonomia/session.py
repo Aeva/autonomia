@@ -295,7 +295,7 @@ class ManualSession(Session):
                     event = Event()
                     event.phase = self.phase
                     event.time = self.now()
-                    event.rr_interval = rr_intervals
+                    event.rr_interval = rr_interval
                     event.bpm = 60_000 / rr_interval
                     event.bpm_rolling_average = 0
 
@@ -326,6 +326,7 @@ class ManualSession(Session):
             event.phase = self.phase
             event.time = self.now()
             event.error = "no data"
+            self.log.append(event)
 
         return event
 
@@ -358,7 +359,23 @@ class ReplaySession(Session):
 
         self.replay_log = []
 
-        if len(self.replay["log"][0]) == 9:
+        if len(self.replay["log"][0]) == 10:
+            for row in self.replay["log"]:
+                phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm, rr_interval = row
+                e = Event()
+                e.phase = Phase(phase)
+                e.time = t
+                e.bpm = bpm
+                e.cadence = cadence
+                e.watts = watts
+                e.distance = distance
+                e.target_cadence = target_cadence
+                e.target_watts = target_watts
+                e.bpm_rolling_average = weighted_bpm
+                e.rr_interval = rr_interval
+                self.replay_log.append(e)
+
+        elif len(self.replay["log"][0]) == 9:
             for row in self.replay["log"]:
                 phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm = row
                 e = Event()
