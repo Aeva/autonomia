@@ -6,6 +6,7 @@ import json
 import os
 from enum import IntEnum
 import config
+import bluetooth
 from misc import zero_pad
 
 # todo: install PyRow properly somewhere
@@ -61,6 +62,7 @@ class Session:
         self.log = []
         self.phase = Phase.INVALID
         self.live = False
+        self.manual_session = False
 
         self.speed = 1
 
@@ -118,11 +120,17 @@ class Session:
     def log_window(self, seconds):
         return self.window(self.log, seconds)
 
-    def connect(self):
+    def connect_bluetooth(self, bluetooth_address):
+        return True
+
+    def connect_erg(self):
         return True
 
     def advance(self):
         return 0
+
+    def shutdown(self):
+        pass
 
     def save_to_disk(self, abort=False):
         prefix = ""
@@ -140,7 +148,7 @@ class Session:
 
         log_headers = [
             "phase", "elapsed_time", "bpm", "cadence", "watts", "distance",
-            "target cadence", "target watts", "bpm_rolling_average"]
+            "target cadence", "target watts", "bpm_rolling_average", "rr_interval"]
 
         logged_stats = []
         for e in self.log:
@@ -153,7 +161,8 @@ class Session:
             target_cadence = e.target_cadence
             target_watts = e.target_watts
             weighted_bpm = e.bpm_rolling_average
-            row = (phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm)
+            rr_interval = e.rr_interval
+            row = (phase, t, bpm, cadence, watts, distance, target_cadence, target_watts, weighted_bpm, rr_interval)
             logged_stats.append(row)
 
         # should probably just dump all of this into a sqlite database
@@ -161,6 +170,7 @@ class Session:
             log_blob = {
                 "date" : self.date,
                 "start_time" : self.start_time,
+                "manual_session" : self.manual_session,
                 "resting_bpm" : self.resting_bpm,
                 "intervals" : self.config.intervals,
                 "calibration_time" : self.config.calibration_time,
@@ -175,6 +185,7 @@ class Session:
             out_file.write(json.dumps(log_blob))
 
         print("Workout complete!")
+        self.shutdown()
 
 
 class RowingSession(Session):
@@ -187,7 +198,10 @@ class RowingSession(Session):
         self.live = True
         self.erg = None
 
-    def connect(self):
+    def connect_bluetooth(self, bluetooth_address):
+        assert(False)
+
+    def connect_erg(self):
         for available_erg in pyrow.find():
             self.erg = pyrow.pyrow(available_erg)
             print("erg found!")
@@ -231,6 +245,88 @@ class RowingSession(Session):
             event.bpm_rolling_average = event.bpm
 
         self.log.append(event)
+        return event
+
+
+
+class ManualSession(Session):
+    """
+    This class represents all of the data in a typical non-rowing workout session.
+    """
+
+    def __init__(self):
+        Session.__init__(self)
+        self.live = True
+        self.connected = True
+        self.manual_session = True
+
+    def connect_bluetooth(self, bluetooth_address):
+        bluetooth.start(bluetooth_address)
+        while True:
+            for stamp, message_type, data in bluetooth.read():
+                if message_type == "pulse":
+                    self.bluetooth = True
+                    return True
+                else:
+                    print(stamp, message_type, data)
+                    if message_type == "fatal":
+                        bluetooth.stop()
+                        return False
+                time.sleep(.1)
+
+    def connect_erg(self):
+        assert(False)
+
+    def workout_started(self):
+        return True
+
+    def shutdown(self):
+        bluetooth.stop()
+
+    def advance(self):
+        event = None
+
+        for stamp, message_type, data in bluetooth.read():
+            if message_type == "pulse":
+                self.connected = True
+
+                _, rr_intervals = data
+                for rr_interval in rr_intervals:
+                    event = Event()
+                    event.phase = self.phase
+                    event.time = self.now()
+                    event.rr_interval = rr_intervals
+                    event.bpm = 60_000 / rr_interval
+                    event.bpm_rolling_average = 0
+
+                    window_seq = self.log_window(5)
+                    window_seq.append(event)
+
+                    if len(window_seq) > 1:
+                        event.bpm_rolling_average = self.weighted_average(window_seq, "bpm", 2)
+                    else:
+                        event.bpm_rolling_average = event.bpm
+
+                    self.log.append(event)
+            elif message_type == "status" or message_type == "fatal":
+                self.connected = False
+
+                print(message_type, data)
+                event = Event()
+                event.phase = self.phase
+                event.time = self.now()
+                event.error = f"{message_type}: {str(data)}"
+                if len(self.log) > 0:
+                    event.bpm = self.log[-1].bpm
+                    event.bpm_rolling_average = self.log[-1].bpm_rolling_average
+                self.log.append(event)
+
+        if not event:
+            event = Event()
+            event.phase = self.phase
+            event.time = self.now()
+            event.error = "no data"
+
         return event
 
 

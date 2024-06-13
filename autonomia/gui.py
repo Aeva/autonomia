@@ -12,6 +12,7 @@ import pygame.display
 import media
 from misc import lerp
 import metronome
+import bluetooth
 
 
 class Display:
@@ -127,6 +128,7 @@ class Display:
         pygame.display.quit()
         pygame.quit()
         metronome.stop()
+        bluetooth.stop()
         sys.exit(0)
 
     def pump_events(self):

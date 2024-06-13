@@ -76,7 +76,7 @@ def metronome_proc(queue):
                         next_beat = time.time_ns()
                         next_rest = None
 
-                    cadence, volume = new_cadence, new_volume
+                    cadence, volume = max(new_cadence, 1), new_volume
                     interval = 60_000_000_000 // cadence
                     beat = interval // meter
                     half_beat = beat // 2

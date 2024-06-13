@@ -7,7 +7,7 @@ import glob
 import datetime
 import pygame
 from gui import Display
-from session import RowingSession, ReplaySession, Phase, Event
+from session import ManualSession, RowingSession, ReplaySession, Phase, Event
 from log_viewer import ResultsGraph
 from resting_bpm import RestingBPM
 from quiesce import FullStop
@@ -237,18 +237,25 @@ class IntervalRunner:
                             color="white", font="smol", x_align=1, y_align=.5)
 
 
-def workout_main(gui, volume, replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
+def workout_main(gui, volume, bluetooth_address, no_erg = False,
+                 replay_path = None, replay_speed = None, no_save = False, bpm_debug = False):
     if volume > 0:
         metronome.start()
+
+    no_erg = False
 
     session = None
     if replay_path:
         assert(os.path.isfile(replay_path))
         session = ReplaySession(replay_path, replay_speed)
     else:
-        session = RowingSession()
-        if not no_save:
-            gui.session = session
+        if bluetooth_address:
+            no_erg = True # TODO
+
+        if no_erg:
+            session = ManualSession()
+        else:
+            session = RowingSession()
 
     keys = []
 
@@ -263,11 +270,16 @@ def workout_main(gui, volume, replay_path = None, replay_speed = None, no_save =
             session.sleep(.25)
         return False
 
-    lobby = ErgSearch()
-    while not session.connect():
-        lobby(gui)
-        if present(None):
-            sys.exit(0)
+    if bluetooth_address:
+        if not session.connect_bluetooth(bluetooth_address):
+            return
+
+    if not no_erg:
+        lobby = ErgSearch()
+        while not session.connect_erg():
+            lobby(gui)
+            if present(None):
+                sys.exit(0)
 
     resting_phase = RestingBPM(session)
 

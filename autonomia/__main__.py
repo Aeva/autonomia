@@ -56,6 +56,11 @@ if __name__ == "__main__":
         help="plot bpm on a global scale")
 
     parser.add_argument(
+        "--no_erg",
+        action="store_true",
+        help="non-rowing exercise session")
+
+    parser.add_argument(
         "--bluetooth_address",
         action="store",
         type=str,
@@ -157,6 +162,7 @@ if __name__ == "__main__":
             workout_main(
                 gui,
                 volume,
+                None,
                 replay_path = replay_path,
                 replay_speed = speed_divisor,
                 no_save = args.no_save,
@@ -166,6 +172,11 @@ if __name__ == "__main__":
             sys.exit(1)
 
     else:
+        if args.no_erg:
+            assert(device_addr != None)
+        else:
+            device_addr = None
         gui = Display()
-        workout_main(gui, volume, no_save=args.no_save, bpm_debug=args.bpm_debug)
-        sys.exit(0)
+        workout_main(gui, volume, device_addr, no_save=args.no_save, bpm_debug=args.bpm_debug)
+    metronome.stop()
+    bluetooth.stop()
