@@ -128,9 +128,9 @@ def start():
     global _queue
 
     if not (_proc and _queue):
-        multiprocessing.set_start_method('spawn')
-        _queue = multiprocessing.Queue()
-        _proc = multiprocessing.Process(target=metronome_proc, args=(_queue,))
+        ctx = multiprocessing.get_context('spawn')
+        _queue = ctx.Queue()
+        _proc = ctx.Process(target=metronome_proc, args=(_queue,))
         _proc.start()
 
 

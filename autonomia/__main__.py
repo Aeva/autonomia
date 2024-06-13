@@ -6,9 +6,6 @@ warnings.simplefilter("ignore")
 import pygame
 warnings.resetwarnings()
 
-import asyncio
-from bleak import BleakScanner
-
 import sys
 import time
 import argparse
@@ -16,29 +13,9 @@ import pathlib
 from gui import Display
 from workout import workout_main, viewer_main
 from battery import battery_main
-from heart import bpm_debug_main
 from metronome_test import metronome_test_main
 import metronome
-
-
-def bluetooth_scan():
-    device_scan = {}
-
-    async def inner():
-        def callback(device, info):
-            if info.service_uuids.count("0000180d-0000-1000-8000-00805f9b34fb"):
-                address = device.address
-                if not device_scan.get(address):
-                    device_scan[address] = info.local_name
-                    print(f"\t{address} -> {info.local_name}")
-
-        scanner = BleakScanner(callback)
-        await scanner.start()
-        await asyncio.sleep(5)
-        await scanner.stop()
-
-    print("Searching for compatible bluetooth devices...\n")
-    asyncio.run(inner())
+import bluetooth
 
 
 if __name__ == "__main__":
@@ -95,7 +72,7 @@ if __name__ == "__main__":
         help="print the bluetooth device battery level")
 
     parser.add_argument(
-        "--bluetooth_bpm_debug",
+        "--bluetooth_debug",
         action="store_true",
         help="print the bluetooth device bpm stream")
 
@@ -107,11 +84,7 @@ if __name__ == "__main__":
         help="tempo")
 
     parser.add_argument(
-        "--metronome_debug",
-        action="store_true")
-
-    parser.add_argument(
-        "--rr_interval_metronome",
+        "--heart_metronome",
         action="store_true")
 
     parser.add_argument(
@@ -136,20 +109,12 @@ if __name__ == "__main__":
         metronome.stop()
         sys.exit(0)
 
-    if args.metronome_debug:
-        metronome.start()
-        print("10 bpm")
-        metronome.reset(10, volume)
-        time.sleep(8)
-        print("20 bpm")
-        metronome.tweak(20, volume)
-        time.sleep(8)
-        metronome.stop()
-        sys.exit()
-
     device_addr = None
     if args.bluetooth_scan:
-        device_addr = bluetooth_scan()
+        print("Searching for compatible bluetooth devices...\n")
+        found = bluetooth.scan()
+        for address, name in found.items():
+            print(f"\t{address} -> {name}")
         sys.exit(0)
 
     elif args.bluetooth_address:
@@ -166,13 +131,13 @@ if __name__ == "__main__":
         battery_main(device_addr)
         sys.exit(0)
 
-    if args.bluetooth_bpm_debug:
-        os.environ["PYTHONASYNCIODEBUG"] = '1'
-        os.environ["BLEAK_LOGGING"] = '1'
-        bpm_debug_main(device_addr)
+    if args.bluetooth_debug:
+        #os.environ["PYTHONASYNCIODEBUG"] = '1'
+        #os.environ["BLEAK_LOGGING"] = '1'
+        bluetooth.debug_main(device_addr)
         sys.exit(0)
 
-    if args.rr_interval_metronome:
+    if args.heart_metronome:
         metronome_test_main(device_addr)
         sys.exit(0)
 
