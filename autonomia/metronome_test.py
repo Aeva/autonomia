@@ -14,10 +14,9 @@ def metronome_test_main(bluetooth_addr):
 
         def pump_events():
             nonlocal pending
-            for stamp, message_type, data in bluetooth.read():
+            for message_type, data in bluetooth.read():
                 if message_type == "pulse":
-                    _, rr_intervals = data
-                    pending += rr_intervals
+                    pending.append(data)
                 else:
                     print(message_type, data)
 

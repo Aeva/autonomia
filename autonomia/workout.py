@@ -257,6 +257,8 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
         if no_erg:
             session = ManualSession()
+            volume = 0
+            bpm_debug = True
         else:
             session = RowingSession()
 
@@ -288,6 +290,8 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
     while session.phase == Phase.RESTING_BPM:
         event = session.advance()
+        if not event:
+            continue
         resting_phase(gui, session, event)
         if present(pygame.K_SPACE):
             session.set_phase(Phase.PENDING)
@@ -297,10 +301,12 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
     while session.phase == Phase.PENDING:
         event = session.advance()
+        if not event:
+            continue
         for i in range(60):
             begin_phase(gui, session, event)
             gui.present()
-            if gui.pump_events().count(pygame.K_SPACE) > 0 or session.workout_started():
+            if gui.pump_events().count(pygame.K_SPACE) > 0 or (session.workout_started() and not no_erg):
                 session.set_phase(Phase.CALIBRATION)
                 break
             session.sleep(1/60)
@@ -359,6 +365,8 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
         while session.phase == Phase.STEADY:
             event = session.advance()
+            if not event:
+                continue
             skip_requested = False
             if session.live or session.phase == event.phase:
                 intervals.update(session, event)
@@ -381,10 +389,10 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
         while session.phase == Phase.COOLDOWN:
             event = session.advance()
+            if not event:
+                continue
             skip_requested = True
-            if event is None:
-                break
-            elif session.live or session.phase == event.phase:
+            if session.live or session.phase == event.phase:
                 intervals.update(session, event)
                 current_bpm = event.bpm_rolling_average
                 intervals.draw(gui, session, current_bpm, remaining_time_str(cooldown_stop_time))
@@ -399,20 +407,18 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
     session.set_phase(Phase.FULLSTOP)
     stop_phase = FullStop()
 
+    pulse = None
     while session.phase == Phase.FULLSTOP:
         event = session.advance()
-        if not event:
-            continue
-        stop_phase(gui, session, event)
+        if event:
+            pulse = event
+        stop_phase(gui, session, pulse)
 
         gui.present()
         for event in pygame.event.get():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 session.set_phase(Phase.CALIBRATION)
                 break
-        #if present(pygame.K_SPACE):
-        #    session.set_phase(Phase.CALIBRATION)
-        #    break
 
     session.set_phase(Phase.RESULTS)
     if not no_save:

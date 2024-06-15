@@ -10,6 +10,7 @@ import sys
 import time
 import argparse
 import pathlib
+import traceback
 from gui import Display
 from workout import workout_main, viewer_main
 from battery import battery_main
@@ -102,81 +103,86 @@ if __name__ == "__main__":
 
     volume = min(max(args.volume, 0.0), 1.0) if args.volume is not None else 1.0
 
-    if args.metronome:
-        metronome.start()
-        metronome.prog(115) #115)
-        metronome.reset(args.metronome / metronome.meter, volume)
-        try:
-            while True:
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            pass
-        metronome.stop()
-        sys.exit(0)
+    try:
+        if args.metronome:
+            metronome.start()
+            metronome.prog(115) #115)
+            metronome.reset(args.metronome / metronome.meter, volume)
+            try:
+                while True:
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                pass
+            metronome.stop()
+            sys.exit(0)
 
-    device_addr = None
-    if args.bluetooth_scan:
-        print("Searching for compatible bluetooth devices...\n")
-        found = bluetooth.scan()
-        for address, name in found.items():
-            print(f"\t{address} -> {name}")
-        sys.exit(0)
+        device_addr = None
+        if args.bluetooth_scan:
+            print("Searching for compatible bluetooth devices...\n")
+            found = bluetooth.scan()
+            for address, name in found.items():
+                print(f"\t{address} -> {name}")
+            sys.exit(0)
 
-    elif args.bluetooth_address:
-        device_addr = args.bluetooth_address
-    else:
-        device_addr = os.environ.get("BLE_HRM_ADDRESS")
+        elif args.bluetooth_address:
+            device_addr = args.bluetooth_address
+        else:
+            device_addr = os.environ.get("BLE_HRM_ADDRESS")
 
-    ###
-    if device_addr:
-        print(f"heart monitor address: {device_addr}")
-    ###
+        ###
+        if device_addr:
+            print(f"heart monitor address: {device_addr}")
+        ###
 
-    if args.battery:
-        battery_main(device_addr)
-        sys.exit(0)
+        if args.battery:
+            battery_main(device_addr)
+            sys.exit(0)
 
-    if args.bluetooth_debug:
-        #os.environ["PYTHONASYNCIODEBUG"] = '1'
-        #os.environ["BLEAK_LOGGING"] = '1'
-        bluetooth.debug_main(device_addr)
-        sys.exit(0)
+        if args.bluetooth_debug:
+            #os.environ["PYTHONASYNCIODEBUG"] = '1'
+            #os.environ["BLEAK_LOGGING"] = '1'
+            bluetooth.debug_main(device_addr)
+            sys.exit(0)
 
-    if args.heart_metronome:
-        metronome_test_main(device_addr)
-        sys.exit(0)
+        if args.heart_metronome:
+            metronome_test_main(device_addr)
+            sys.exit(0)
 
-    if args.viewer:
-        gui = Display()
-        viewer_main(gui, normalized_bpm_range=args.global_bpm_range)
-        sys.exit(0)
-
-    elif args.replay:
-        replay_path = args.replay
-        if os.path.isfile(replay_path):
-            speed_divisor = None
-            if args.speed:
-                speed_divisor = 1 / args.speed
-
+        if args.viewer:
             gui = Display()
-            workout_main(
-                gui,
-                volume,
-                None,
-                replay_path = replay_path,
-                replay_speed = speed_divisor,
-                no_save = args.no_save,
-                bpm_debug = args.bpm_debug)
-        else:
-            print("Replay file not found.")
-            sys.exit(1)
+            viewer_main(gui, normalized_bpm_range=args.global_bpm_range)
+            sys.exit(0)
 
-    else:
-        if args.no_erg:
-            assert(device_addr != None)
+        elif args.replay:
+            replay_path = args.replay
+            if os.path.isfile(replay_path):
+                speed_divisor = None
+                if args.speed:
+                    speed_divisor = 1 / args.speed
+
+                gui = Display()
+                workout_main(
+                    gui,
+                    volume,
+                    None,
+                    replay_path = replay_path,
+                    replay_speed = speed_divisor,
+                    no_save = args.no_save,
+                    bpm_debug = args.bpm_debug)
+            else:
+                print("Replay file not found.")
+                sys.exit(1)
+
         else:
-            device_addr = None
-        gui = Display()
-        workout_main(gui, volume, device_addr, no_save=args.no_save, bpm_debug=args.bpm_debug)
-    metronome.stop()
-    bluetooth.stop()
+            if args.no_erg:
+                assert(device_addr != None)
+            else:
+                device_addr = None
+            gui = Display()
+            workout_main(gui, volume, device_addr, no_save=args.no_save, bpm_debug=args.bpm_debug)
+    except Exception:
+        print(traceback.format_exc())
+
+    finally:
+        metronome.stop()
+        bluetooth.stop()

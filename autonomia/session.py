@@ -260,15 +260,17 @@ class ManualSession(Session):
         self.connected = True
         self.manual_session = True
 
+        self.stream_time = 0
+
     def connect_bluetooth(self, bluetooth_address):
         bluetooth.start(bluetooth_address)
         while True:
-            for stamp, message_type, data in bluetooth.read():
+            for message_type, data in bluetooth.read():
                 if message_type == "pulse":
                     self.bluetooth = True
                     return True
                 else:
-                    print(stamp, message_type, data)
+                    print(message_type, data)
                     if message_type == "fatal":
                         bluetooth.stop()
                         return False
@@ -285,39 +287,37 @@ class ManualSession(Session):
 
     def advance(self):
         event = None
-
-        for stamp, message_type, data in bluetooth.read():
+        for message_type, data in bluetooth.read():
             if message_type == "pulse":
                 self.connected = True
+                rr_interval = data
+                self.stream_time += rr_interval
+                event = Event()
+                event.phase = self.phase
+                event.time = self.stream_time / 1000
+                event.rr_interval = rr_interval
+                event.bpm = 60_000 / rr_interval
+                event.bpm_rolling_average = 0
 
-                _, rr_intervals = data
-                for rr_interval in rr_intervals:
-                    event = Event()
-                    event.phase = self.phase
-                    event.time = self.now()
-                    event.rr_interval = rr_interval
-                    event.bpm = 60_000 / rr_interval
-                    event.bpm_rolling_average = 0
+                window_seq = self.log_window(5)
+                window_seq.append(event)
 
-                    window_seq = self.log_window(5)
-                    window_seq.append(event)
+                if len(window_seq) > 1:
+                    event.bpm_rolling_average = self.weighted_average(window_seq, "bpm", 2)
+                else:
+                    event.bpm_rolling_average = event.bpm
 
-                    if len(window_seq) > 1:
-                        event.bpm_rolling_average = self.weighted_average(window_seq, "bpm", 2)
-                    else:
-                        event.bpm_rolling_average = event.bpm
-
-                    self.log.append(event)
+                self.log.append(event)
 
             elif message_type == "status" or message_type == "fatal":
                 self.connected = False
 
                 print(message_type, data)
-                event = Event()
-                event.phase = self.phase
-                event.time = self.now()
-                event.error = f"{message_type}: {str(data)}"
-                self.log.append(event)
+                err = Event()
+                err.phase = self.phase
+                err.time = self.stream_time / 1000
+                err.error = f"{message_type}: {str(data)}"
+                self.log.append(err)
 
         if event and event.bpm > 1 and not event.error:
             return event

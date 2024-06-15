@@ -57,10 +57,11 @@ async def heart_monitor_runner(command_queue, event_queue, device_address):
         bpm, rr_intervals = decode(packet)
 
         if not (rr_intervals and len(rr_intervals) > 0):
-            event_queue.put((time.time(), "status", "reconnecting: missing rr_intervals"))
+            event_queue.put(("status", "reconnecting: missing rr_intervals"))
             reconnect = True
         else:
-            event_queue.put((time.time(), "pulse", (bpm, rr_intervals)))
+            for rr_interval in rr_intervals:
+                event_queue.put(("pulse", rr_interval))
 
     while reconnect == True:
         reconnect = False
@@ -71,11 +72,11 @@ async def heart_monitor_runner(command_queue, event_queue, device_address):
                 try:
                     battery_level = await client.read_gatt_char(BATTERY_LEVEL_CHARACTERISTIC)
                     battery_level = int.from_bytes(battery_level, byteorder='little')
-                    event_queue.put((time.time(), "battery", battery_level))
+                    event_queue.put(("battery", battery_level))
 
                     while not reconnect:
                         if not client.is_connected:
-                            event_queue.put((time.time(), "status", "reconnecting: connection lost"))
+                            event_queue.put(("status", "reconnecting: connection lost"))
                             reconnect = True
                             break
 
@@ -84,20 +85,20 @@ async def heart_monitor_runner(command_queue, event_queue, device_address):
                         except:
                             packet = None
 
-                        if packet and packet[0] == "halt":
-                            event_queue.put((time.time(), "status", "halt requested by application"))
+                        if packet == "halt":
+                            event_queue.put(("status", "halt requested by application"))
                             reconnect = False
                             break
 
                         await asyncio.sleep(0.1)
                 except Exception as e:
-                    event_queue.put((time.time(), "fatal", e))
+                    event_queue.put(("fatal", e))
 
                 if client.is_connected:
                     await client.stop_notify(HRM_CHARACTERISTIC)
 
         except BleakError as error:
-            event_queue.put((time.time(), "fatal", error))
+            event_queue.put(("fatal", error))
             await asyncio.sleep(0.1)
 
 
@@ -106,8 +107,7 @@ def heart_monitor_proc(command_queue, event_queue, device_address):
     Entry point for the metronome subprocess.
     """
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(heart_monitor_runner(command_queue, event_queue, device_address))
+    asyncio.run(heart_monitor_runner(command_queue, event_queue, device_address))
 
 
 def start(device_address):
@@ -117,6 +117,8 @@ def start(device_address):
     global _proc
     global _command_queue
     global _event_queue
+
+    assert(device_address != None)
 
     if not _proc:
         ctx = multiprocessing.get_context('spawn')
@@ -176,6 +178,7 @@ def scan(timeout=5):
 
 
 def debug_main(bluetooth_addr):
+    assert(bluetooth_addr != None)
     start(bluetooth_addr)
     try:
         while True:
