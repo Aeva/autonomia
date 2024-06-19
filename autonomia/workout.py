@@ -246,6 +246,7 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
         metronome.start()
 
     no_erg = False
+    manual_cadence = None
 
     session = None
     if replay_path:
@@ -257,8 +258,9 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
         if no_erg:
             session = ManualSession()
-            volume = 0
             bpm_debug = True
+            manual_cadence = 90 // metronome.meter
+            metronome.prog(115)
         else:
             session = RowingSession()
 
@@ -297,6 +299,10 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
             session.set_phase(Phase.PENDING)
             break
 
+    if manual_cadence:
+        print("?", manual_cadence, volume)
+        metronome.reset(manual_cadence, volume)
+
     begin_phase = PleaseBegin()
 
     while session.phase == Phase.PENDING:
@@ -327,8 +333,8 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
 
     current_bpm = 0
     for interval in range(session.config.intervals):
-
-        metronome.tweak(15, 0)
+        if not manual_cadence:
+            metronome.tweak(15, 0)
 
         calibration_stop_time = session.now() + session.config.calibration_time * 60
         if session.phase == Phase.COOLDOWN:
@@ -345,9 +351,16 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
                 for i in range(15):
                     intervals.draw(gui, session, current_bpm, remaining_time_str(calibration_stop_time))
                     gui.present()
-                    if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
+                    keys = gui.pump_events()
+                    if keys.count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
                         break
+                    elif manual_cadence and keys.count(pygame.K_UP) > 0:
+                        manual_cadence += 1
+                        metronome.tweak(manual_cadence, volume)
+                    elif manual_cadence and keys.count(pygame.K_DOWN) > 0:
+                        manual_cadence -= 1
+                        metronome.tweak(manual_cadence, volume)
                     session.sleep(1/15)
             else:
                 skip_requested = True
@@ -359,7 +372,8 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
         if intervals.samples > 0:
             cadence //= intervals.samples
 
-        metronome.reset(cadence, 1 * volume)
+        if not manual_cadence:
+            metronome.reset(cadence, 1 * volume)
 
         steady_stop_time = session.now() + session.config.steady_time * 60
 
@@ -374,9 +388,16 @@ def workout_main(gui, volume, bluetooth_address, no_erg = False,
                 for i in range(60):
                     intervals.draw(gui, session, current_bpm, remaining_time_str(steady_stop_time))
                     gui.present()
-                    if gui.pump_events().count(pygame.K_BACKSPACE) > 0:
+                    keys = gui.pump_events()
+                    if keys.count(pygame.K_BACKSPACE) > 0:
                         skip_requested = True
                         break
+                    elif manual_cadence and keys.count(pygame.K_UP) > 0:
+                        manual_cadence += 1
+                        metronome.tweak(manual_cadence, volume)
+                    elif manual_cadence and keys.count(pygame.K_DOWN) > 0:
+                        manual_cadence -= 1
+                        metronome.tweak(manual_cadence, volume)
                     session.sleep(1/60)
             else:
                 skip_requested = True

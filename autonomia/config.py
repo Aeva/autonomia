@@ -19,7 +19,7 @@ class Config:
         self.calibration_time = 1.5
 
         # Number of minutes to exercise at the calibrated setpoint.
-        self.steady_time = 12
+        self.steady_time = 15 # 15 for biking, 12 for rowing
 
         # Number of minutes to spend cooling down after an interval.
         self.cooldown_time = 1

@@ -11,7 +11,7 @@ warnings.resetwarnings()
 
 
 # measures per minute, not beats per minute!
-meter = 4
+meter = 3
 
 
 _proc = None
