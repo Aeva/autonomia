@@ -38,7 +38,7 @@ def metronome_proc(queue):
             midi_info = pygame.midi.get_device_info(midi_id)
 
     if not midi_info:
-        print("Can't find timidity.  Run `timidity -iA -Os` and try again.")
+        print("Can't find timidity.  Run `timidity -iA -Os --volume=200` and try again.")
         return
 
     print(midi_info)
